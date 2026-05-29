@@ -100,7 +100,7 @@ export function FormulaAssistant({
 
   const handleCopy = () => {
     // Extrait la formule entre les backticks (si présente) pour ne copier que la formule
-    const formulaMatch = response.match(/```(?:excel)?\n?(.*?)\n?```/s);
+    const formulaMatch = response.match(/```(?:excel)?\n?([\s\S]*?)\n?```/);
     const textToCopy = formulaMatch ? formulaMatch[1].trim() : response;
     
     navigator.clipboard.writeText(textToCopy);
@@ -189,12 +189,27 @@ export function FormulaAssistant({
               <p className="font-semibold text-white mb-1">Vos 2 essais gratuits sont épuisés !</p>
               <p className="text-sm text-slate-400">Entrez votre clé API Gemini gratuite pour continuer à générer des formules illimitées.</p>
             </div>
-            <Button 
-              onClick={onDismissKeyPrompt}
-              className="bg-primary hover:bg-yellow-600 text-white rounded-xl px-5 flex-shrink-0"
-            >
-              Entrer ma clé
-            </Button>
+            <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto flex-shrink-0">
+              <a 
+                href="https://aistudio.google.com/app/apikey" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="w-full sm:w-auto"
+              >
+                <Button 
+                  variant="outline"
+                  className="border-primary/30 hover:bg-primary/10 text-primary hover:text-white rounded-xl px-5 w-full transition-all"
+                >
+                  Obtenir une clé gratuite
+                </Button>
+              </a>
+              <Button 
+                onClick={onDismissKeyPrompt}
+                className="bg-primary hover:bg-yellow-600 text-white rounded-xl px-5 w-full sm:w-auto transition-all"
+              >
+                Entrer ma clé
+              </Button>
+            </div>
           </div>
         </div>
       )}
