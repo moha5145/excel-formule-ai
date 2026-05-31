@@ -1,10 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { z } from "zod";
+
+const EnhanceRequestSchema = z.object({
+  prompt: z.string().min(1, "Le prompt ne peut pas être vide").max(3000, "Le prompt est trop long (max 3000 caractères)"),
+  apiKey: z.string().optional(),
+});
 
 export async function POST(req: NextRequest) {
   try {
-    const { prompt, apiKey } = await req.json();
+    const body = await req.json();
     
+    // Validation Zod des paramètres d'entrée
+    const parsed = EnhanceRequestSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
+    }
+    
+    const { prompt, apiKey } = parsed.data;
     const finalApiKey = apiKey || process.env.GEMINI_API_KEY;
     
     if (!finalApiKey) {
@@ -28,6 +41,13 @@ Exemple de sortie : "Je souhaite obtenir une formule permettant de calculer la s
     return NextResponse.json({ result: text.trim() });
   } catch (error: any) {
     console.error(error);
-    return NextResponse.json({ error: error.message || "Erreur lors de l'amélioration de la demande" }, { status: 500 });
+    // Masquer les messages d'erreur système bruts et donner des conseils pertinents
+    let userMessage = error.message || "Erreur lors de l'amélioration de la demande";
+    if (userMessage.includes("API key not valid") || userMessage.includes("API_KEY_INVALID")) {
+      userMessage = "La clé API Gemini fournie est invalide. Veuillez la vérifier et réessayer.";
+    } else if (userMessage.includes("quota") || userMessage.includes("429")) {
+      userMessage = "Le quota de votre clé API Gemini a été dépassé. Veuillez réessayer dans quelques instants.";
+    }
+    return NextResponse.json({ error: userMessage }, { status: 500 });
   }
 }

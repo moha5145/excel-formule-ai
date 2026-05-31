@@ -17,7 +17,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="fr" className={`dark ${dmSans.variable}`} suppressHydrationWarning>
-      <body className="min-h-screen bg-background text-foreground antialiased font-sans">
+      <body className="min-h-screen bg-background text-foreground antialiased font-sans" suppressHydrationWarning>
         {children}
         <Toaster />
       </body>

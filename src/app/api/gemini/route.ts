@@ -1,10 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { z } from "zod";
+
+const GeminiRequestSchema = z.object({
+  prompt: z.string().min(1, "Le prompt ne peut pas être vide").max(3000, "Le prompt est trop long (max 3000 caractères)"),
+  apiKey: z.string().optional(),
+  modelChoice: z.enum(["flash", "pro"]).optional(),
+});
 
 export async function POST(req: NextRequest) {
   try {
-    const { prompt, apiKey } = await req.json();
+    const body = await req.json();
     
+    // Validation Zod des paramètres d'entrée
+    const parsed = GeminiRequestSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
+    }
+    
+    const { prompt, apiKey, modelChoice } = parsed.data;
     const finalApiKey = apiKey || process.env.GEMINI_API_KEY;
     
     if (!finalApiKey) {
@@ -12,7 +26,10 @@ export async function POST(req: NextRequest) {
     }
 
     const genAI = new GoogleGenerativeAI(finalApiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash" });
+    
+    // Sélection dynamique du modèle en fonction du choix de l'utilisateur (Flash ou Pro)
+    const selectedModel = modelChoice === "pro" ? "gemini-3.5-pro" : "gemini-3.5-flash";
+    const model = genAI.getGenerativeModel({ model: selectedModel });
     
     const systemInstruction = `Tu es un expert certifié en Microsoft Excel, Google Sheets, comptabilité et audit financier.
 
@@ -35,6 +52,13 @@ STRUCTURE DE RÉPONSE (respecter cet ordre) :
     return NextResponse.json({ result: text });
   } catch (error: any) {
     console.error(error);
-    return NextResponse.json({ error: error.message || "Erreur de génération avec l'API Gemini" }, { status: 500 });
+    // Masquer les messages d'erreur système bruts et donner des conseils pertinents
+    let userMessage = error.message || "Erreur de génération avec l'API Gemini";
+    if (userMessage.includes("API key not valid") || userMessage.includes("API_KEY_INVALID")) {
+      userMessage = "La clé API Gemini fournie est invalide. Veuillez la vérifier et réessayer.";
+    } else if (userMessage.includes("quota") || userMessage.includes("429")) {
+      userMessage = "Le quota de votre clé API Gemini a été dépassé. Veuillez réessayer dans quelques instants.";
+    }
+    return NextResponse.json({ error: userMessage }, { status: 500 });
   }
 }
