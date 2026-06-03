@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Copy, Check, Sparkles, Wand2, Undo2, Zap, Brain, Key } from "lucide-react";
+import { Loader2, Copy, Check, Sparkles, Wand2, Undo2, Zap, Brain, Key, Download } from "lucide-react";
 import { toast } from "sonner";
 import { findDemoResponse } from "@/lib/demoResponses";
 import ReactMarkdown from "react-markdown";
@@ -53,7 +53,7 @@ export function FormulaAssistant({
   }, [onRestoreItem]);
 
   const handleEnhance = async () => {
-    if (!prompt.trim()) return;
+    if (!prompt.trim() || enhancing || loading) return;
     setPreviousPrompt(prompt);
     setIsDemoResponse(false);
     setEnhancing(true);
@@ -75,16 +75,23 @@ export function FormulaAssistant({
     }
   };
 
+  const hasScrolledRef = useRef(false);
+
   useEffect(() => {
-    if (response && resultRef.current) {
-      setTimeout(() => {
-        resultRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-      }, 100);
+    if (loading) {
+      hasScrolledRef.current = false;
+    }
+  }, [loading]);
+
+  useEffect(() => {
+    if (response && resultRef.current && !hasScrolledRef.current) {
+      hasScrolledRef.current = true;
+      resultRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }, [response]);
 
   const handleGenerate = async () => {
-    if (!prompt.trim()) return;
+    if (!prompt.trim() || loading) return;
     if (!apiKey && freeUsesLeft !== null && freeUsesLeft !== undefined && freeUsesLeft <= 0) {
       if (onRequestKeyModal) onRequestKeyModal();
       return;
@@ -98,12 +105,34 @@ export function FormulaAssistant({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt, apiKey, modelChoice }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setResponse(data.result);
+      
+      if (!res.ok) {
+        const contentType = res.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+          const data = await res.json();
+          throw new Error(data.error);
+        } else {
+          throw new Error("Erreur serveur lors de la génération.");
+        }
+      }
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("Le flux de réponse est indisponible.");
+
+      const decoder = new TextDecoder();
+      let streamResponse = "";
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        streamResponse += chunk;
+        setResponse(streamResponse);
+      }
+
       setHistory((prev) => {
         const filtered = prev.filter((item) => item.prompt !== prompt);
-        return [{ prompt, response: data.result }, ...filtered].slice(0, 5);
+        return [{ prompt, response: streamResponse }, ...filtered].slice(0, 5);
       });
       if (onGenerateSuccess) onGenerateSuccess();
     } catch (err: any) {
@@ -137,6 +166,34 @@ export function FormulaAssistant({
     toast.success("Formule copiée dans le presse-papier !");
   };
 
+  const handleDownload = () => {
+    if (!response) return;
+    const blob = new Blob([response], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `formule-excel-compta-ai-${Date.now()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Fichier de formule téléchargé !");
+  };
+
+  // Keyboard Shortcuts (Ctrl+Enter / Cmd+Enter to generate, Ctrl+Shift+E / Cmd+Shift+E to enhance)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        e.preventDefault();
+        handleGenerate();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "E" || e.key === "e")) {
+        e.preventDefault();
+        handleEnhance();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [prompt, apiKey, modelChoice, freeUsesLeft, loading, enhancing]);
+
   return (
     <div className="w-full max-w-3xl mx-auto flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="bg-card/60 backdrop-blur-xl rounded-3xl border border-border/50 p-8 shadow-[0_8px_30px_rgb(0,0,0,0.12)] transition-all focus-within:border-primary/30 focus-within:shadow-primary/10">
@@ -157,7 +214,7 @@ export function FormulaAssistant({
                 <button
                   type="button"
                   onClick={() => onModelChange("flash")}
-                  className={`flex items-center gap-1 px-2 py-1 rounded-md transition-all cursor-pointer ${modelChoice === "flash" ? "bg-primary text-white font-medium shadow-sm" : "text-slate-400 hover:text-white"}`}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-md transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary ${modelChoice === "flash" ? "bg-primary text-white font-medium shadow-sm" : "text-slate-400 hover:text-white"}`}
                   title="Modèle rapide (Gemini 3.5 Flash)"
                 >
                   <Zap size={12} /> Flash
@@ -165,7 +222,7 @@ export function FormulaAssistant({
                 <button
                   type="button"
                   onClick={() => onModelChange("pro")}
-                  className={`flex items-center gap-1 px-2 py-1 rounded-md transition-all cursor-pointer ${modelChoice === "pro" ? "bg-gradient-to-r from-yellow-600 to-yellow-500 text-white font-medium shadow-sm" : "text-slate-400 hover:text-white"}`}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-md transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary ${modelChoice === "pro" ? "bg-gradient-to-r from-yellow-600 to-yellow-500 text-white font-medium shadow-sm" : "text-slate-400 hover:text-white"}`}
                   title="Modèle expert pour requêtes complexes (Gemini 3.5 Pro)"
                 >
                   <Brain size={12} /> Pro
@@ -177,7 +234,8 @@ export function FormulaAssistant({
               size="sm"
               onClick={handleEnhance}
               disabled={enhancing || loading || !prompt.trim()}
-              className="h-8 text-xs text-primary hover:text-yellow-400 hover:bg-primary/10 rounded-lg px-3 -ml-2 sm:ml-0"
+              className="h-8 text-xs text-primary hover:text-yellow-400 hover:bg-primary/10 rounded-lg px-3 -ml-2 sm:ml-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+              aria-label="Améliorer la demande en langage naturel"
             >
               {enhancing ? <Loader2 className="mr-2 h-3 w-3 animate-spin" /> : <Wand2 className="mr-2 h-3 w-3" />}
               Améliorer ma demande
@@ -189,9 +247,20 @@ export function FormulaAssistant({
           id="prompt-input"
           placeholder="Ex: Si la cellule A1 est supérieure à 1000, appliquer une remise de 10% (A1*0.1), sinon 0."
           value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          className="min-h-[140px] bg-slate-900/40 border-slate-700/50 text-white text-lg rounded-2xl mb-2 p-4 resize-none focus-visible:ring-primary/30 placeholder:text-slate-500"
+          onChange={(e) => setPrompt(e.target.value.slice(0, 3000))}
+          className="min-h-[140px] bg-slate-900/40 border-slate-700/50 text-white text-lg rounded-2xl p-4 resize-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:border-primary/50 placeholder:text-slate-500"
+          aria-label="Description de la formule à générer"
         />
+
+        {/* Info & Caractère compteur */}
+        <div className="flex justify-between items-center mt-2 mb-4 px-1 text-slate-500 text-[10px]">
+          <span>
+            Raccourcis : <kbd className="bg-slate-800 px-1 py-0.5 rounded text-slate-400">Ctrl+Entrée</kbd> pour générer · <kbd className="bg-slate-800 px-1 py-0.5 rounded text-slate-400">Ctrl+Maj+E</kbd> pour améliorer
+          </span>
+          <span className={`text-xs ${prompt.length >= 2700 ? "text-red-400 font-semibold animate-pulse" : "text-slate-600"}`}>
+            {prompt.length}/3000
+          </span>
+        </div>
 
         {/* Bouton Undo */}
         {previousPrompt && previousPrompt !== prompt && (
@@ -200,7 +269,8 @@ export function FormulaAssistant({
               variant="ghost"
               size="sm"
               onClick={() => { setPrompt(previousPrompt); setPreviousPrompt(""); }}
-              className="text-slate-400 hover:text-white text-xs h-7 px-2 hover:bg-slate-800/50 rounded-lg flex items-center gap-1 cursor-pointer"
+              className="text-slate-400 hover:text-white text-xs h-7 px-2 hover:bg-slate-800/50 rounded-lg flex items-center gap-1 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              aria-label="Annuler l'amélioration du prompt"
             >
               <Undo2 className="w-3.5 h-3.5" /> Annuler l'amélioration
             </Button>
@@ -226,8 +296,9 @@ export function FormulaAssistant({
                   setIsDemoResponse(true);
                 }
               }}
-              className="text-xs bg-slate-800/80 hover:bg-primary/20 hover:border-primary/40 hover:text-primary text-slate-300 border border-slate-700 rounded-full px-3 py-1.5 transition-all text-left cursor-pointer"
+              className="text-xs bg-slate-800/80 hover:bg-primary/20 hover:border-primary/40 hover:text-primary text-slate-300 border border-slate-700 rounded-full px-3 py-1.5 transition-all text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
               title={example.label}
+              aria-label={`Remplir avec l'exemple : ${example.label}`}
             >
               {example.label}
             </button>
@@ -247,7 +318,7 @@ export function FormulaAssistant({
               </p>
               <div className="text-xs text-slate-300 bg-slate-900/50 p-3 rounded-lg border border-slate-700 flex items-center justify-between">
                 <span>Cliquez sur le bouton pour configurer votre clé.</span>
-                <Button size="sm" onClick={onRequestKeyModal} className="h-8 px-4 text-xs bg-primary hover:bg-yellow-600 text-white cursor-pointer transition-all">Ajouter ma clé</Button>
+                <Button size="sm" onClick={onRequestKeyModal} className="h-8 px-4 text-xs bg-primary hover:bg-yellow-600 text-white cursor-pointer transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">Ajouter ma clé</Button>
               </div>
             </div>
           </div>
@@ -256,7 +327,8 @@ export function FormulaAssistant({
         <Button
           onClick={handleGenerate}
           disabled={loading || !prompt.trim() || (!apiKey && freeUsesLeft !== null && freeUsesLeft !== undefined && freeUsesLeft <= 0)}
-          className="w-full bg-primary hover:bg-yellow-600 text-white rounded-2xl h-14 text-lg font-medium transition-all shadow-lg shadow-primary/20 hover:shadow-primary/40 disabled:opacity-50 disabled:shadow-none disabled:cursor-not-allowed"
+          className="w-full bg-primary hover:bg-yellow-600 text-white rounded-2xl h-14 text-lg font-medium transition-all shadow-lg shadow-primary/20 hover:shadow-primary/40 disabled:opacity-50 disabled:shadow-none disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+          aria-label="Générer la formule Excel"
         >
           {loading ? (
             <><Loader2 className="mr-3 h-5 w-5 animate-spin" /> Génération en cours...</>
@@ -280,17 +352,29 @@ export function FormulaAssistant({
                 </span>
               )}
             </h3>
-            <Button
-              variant="outline"
-              onClick={handleCopy}
-              className="border-slate-700 bg-slate-800/50 hover:bg-slate-700 active:scale-95 text-white rounded-xl transition-all h-10 px-4 cursor-pointer"
-            >
-              {copied ? (
-                <><Check size={16} className="text-green-500 mr-2" /> Copié</>
-              ) : (
-                <><Copy size={16} className="mr-2" /> Copier la formule</>
-              )}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={handleCopy}
+                className="border-slate-700 bg-slate-800/50 hover:bg-slate-700 active:scale-95 text-white rounded-xl transition-all h-10 px-4 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                aria-label="Copier la formule générée"
+              >
+                {copied ? (
+                  <><Check size={16} className="text-green-500 mr-2" /> Copié</>
+                ) : (
+                  <><Copy size={16} className="mr-2" /> Copier la formule</>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleDownload}
+                className="border-slate-700 bg-slate-800/50 hover:bg-slate-700 active:scale-95 text-white rounded-xl transition-all h-10 px-4 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                title="Télécharger la réponse (.txt)"
+                aria-label="Télécharger le fichier de réponse"
+              >
+                <Download size={16} className="mr-2" /> Télécharger
+              </Button>
+            </div>
           </div>
 
           <div className="prose prose-invert prose-p:text-slate-300 prose-a:text-primary hover:prose-a:text-yellow-400 prose-strong:text-white prose-li:text-slate-300 max-w-none">

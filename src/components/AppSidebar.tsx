@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import { Key, ExternalLink, HelpCircle, History, Trash2, ChevronLeft, ChevronRight, Coffee, LogOut, Zap, Brain } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
@@ -22,8 +23,10 @@ export function AppSidebar({
   onOpenKeyModal,
   onLogout,
   onRestoreHistory,
-}: AppSidebarProps) {
+  isMobileDrawer = false,
+}: AppSidebarProps & { isMobileDrawer?: boolean }) {
   const [collapsed, setCollapsed] = useState(false);
+  const isCollapsed = isMobileDrawer ? false : collapsed;
   const [history, setHistory] = useLocalStorage<HistoryItem[]>("excel_compta_history", []);
 
 
@@ -34,39 +37,45 @@ export function AppSidebar({
 
   return (
     <aside
-      className={`relative flex-shrink-0 flex flex-col transition-all duration-300 ease-in-out
-        ${collapsed ? "w-14" : "w-72"}
-        bg-slate-900/60 backdrop-blur-xl border-r border-slate-800/60 min-h-full`}
+      className={isMobileDrawer 
+        ? "relative w-full h-full flex flex-col bg-transparent" 
+        : `relative flex-shrink-0 flex flex-col transition-all duration-300 ease-in-out
+          ${isCollapsed ? "w-14" : "w-72"}
+          bg-slate-900/60 backdrop-blur-xl border-r border-slate-800/60 min-h-full`}
     >
       {/* Toggle collapse button */}
-      <button
-        onClick={() => setCollapsed(!collapsed)}
-        className="absolute -right-3 top-6 z-20 w-6 h-6 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-all shadow-md cursor-pointer"
-        title={collapsed ? "Ouvrir le panneau" : "Réduire le panneau"}
-      >
-        {collapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
-      </button>
+      {!isMobileDrawer && (
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="absolute -right-3 top-6 z-20 w-6 h-6 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-all shadow-md cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+          title={isCollapsed ? "Ouvrir le panneau" : "Réduire le panneau"}
+          aria-label={isCollapsed ? "Ouvrir la barre latérale" : "Réduire la barre latérale"}
+        >
+          {isCollapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
+        </button>
+      )}
 
-      <div className={`flex flex-col gap-6 p-4 overflow-hidden ${collapsed ? "items-center" : ""}`}>
+      <div className={`flex flex-col gap-6 p-4 overflow-hidden ${isCollapsed ? "items-center" : ""}`}>
 
         {/* ── Section : Clé API ───────────────────── */}
         <div>
-          {!collapsed && (
+          {!isCollapsed && (
             <p className="text-[10px] uppercase tracking-widest text-slate-500 font-semibold mb-2">
               Clé API Gemini
             </p>
           )}
 
           {apiKey ? (
-            <div className={`flex ${collapsed ? "flex-col gap-2" : "gap-2"} items-center`}>
-              <div className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-xl bg-green-950/30 border border-green-800/40 text-green-400 text-xs ${collapsed ? "justify-center" : ""}`}>
+            <div className={`flex ${isCollapsed ? "flex-col gap-2" : "gap-2"} items-center`}>
+              <div className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-xl bg-green-950/30 border border-green-800/40 text-green-400 text-xs ${isCollapsed ? "justify-center" : ""}`}>
                 <Key size={12} />
-                {!collapsed && <span className="truncate">Clé active</span>}
+                {!isCollapsed && <span className="truncate">Clé active</span>}
               </div>
               <button
                 onClick={onLogout}
                 title="Retirer la clé API"
-                className="p-2 rounded-xl border border-slate-800 bg-slate-900/50 text-slate-500 hover:text-red-400 hover:border-red-800/50 hover:bg-red-950/20 transition-all cursor-pointer flex-shrink-0"
+                className="p-2 rounded-xl border border-slate-800 bg-slate-900/50 text-slate-500 hover:text-red-400 hover:border-red-800/50 hover:bg-red-950/20 transition-all cursor-pointer flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                aria-label="Retirer la clé API Gemini de l'application"
               >
                 <LogOut size={12} />
               </button>
@@ -74,18 +83,19 @@ export function AppSidebar({
           ) : (
             <button
               onClick={() => onOpenKeyModal()}
-              className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl border border-dashed border-primary/30 bg-primary/5 text-primary hover:bg-primary/10 hover:border-primary/50 transition-all text-xs font-medium cursor-pointer ${collapsed ? "justify-center" : ""}`}
+              className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl border border-dashed border-primary/30 bg-primary/5 text-primary hover:bg-primary/10 hover:border-primary/50 transition-all text-xs font-medium cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${isCollapsed ? "justify-center" : ""}`}
               title="Entrer ma clé API Gemini"
+              aria-label="Saisir votre clé API Gemini personnelle"
             >
               <Key size={12} />
-              {!collapsed && "Entrer ma clé API"}
+              {!isCollapsed && "Entrer ma clé API"}
             </button>
           )}
         </div>
 
         {/* ── Section : Historique ────────────────── */}
         <div className="flex-1 min-h-0">
-          {!collapsed && (
+          {!isCollapsed && (
             <div className="flex items-center justify-between mb-2">
               <p className="text-[10px] uppercase tracking-widest text-slate-500 font-semibold">
                 Historique récent
@@ -94,7 +104,8 @@ export function AppSidebar({
                 <button
                   onClick={handleClearHistory}
                   title="Effacer l'historique"
-                  className="text-slate-600 hover:text-red-400 transition-colors cursor-pointer"
+                  className="text-slate-600 hover:text-red-400 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded p-0.5"
+                  aria-label="Effacer tout l'historique"
                 >
                   <Trash2 size={11} />
                 </button>
@@ -102,11 +113,12 @@ export function AppSidebar({
             </div>
           )}
 
-          {collapsed ? (
+          {isCollapsed ? (
             <button
               onClick={() => setCollapsed(false)}
               title={`${history.length} requête(s) dans l'historique`}
-              className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-800/50 border border-slate-700/50 text-slate-400 hover:text-white transition-all relative cursor-pointer"
+              className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-800/50 border border-slate-700/50 text-slate-400 hover:text-white transition-all relative cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              aria-label={`Ouvrir la barre latérale pour voir l'historique de ${history.length} requêtes`}
             >
               <History size={14} />
               {history.length > 0 && (
@@ -129,8 +141,9 @@ export function AppSidebar({
                   key={i}
                   type="button"
                   onClick={() => onRestoreHistory(item)}
-                  className="text-left w-full px-3 py-2.5 rounded-xl bg-slate-800/40 hover:bg-primary/10 border border-slate-800 hover:border-primary/30 transition-all group cursor-pointer"
+                  className="text-left w-full px-3 py-2.5 rounded-xl bg-slate-800/40 hover:bg-primary/10 border border-slate-800 hover:border-primary/30 transition-all group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                   title={item.prompt}
+                  aria-label={`Restaurer la requête historique : ${item.prompt}`}
                 >
                   <p className="text-xs text-slate-300 group-hover:text-primary truncate transition-colors font-medium leading-tight">
                     {item.prompt}
@@ -145,17 +158,27 @@ export function AppSidebar({
         </div>
 
         {/* ── Section : Support ───────────────────── */}
-        <div className="mt-auto pt-3 border-t border-slate-800/60">
+        <div className="mt-auto pt-3 border-t border-slate-800/60 flex flex-col gap-1">
           <a
             href="https://buymeacoffee.com/"
             target="_blank"
             rel="noreferrer"
             title="Soutenir le projet"
-            className={`flex items-center gap-2 px-3 py-2 rounded-xl text-slate-500 hover:text-yellow-400 hover:bg-yellow-950/20 border border-transparent hover:border-yellow-900/30 transition-all text-xs cursor-pointer ${collapsed ? "justify-center" : ""}`}
+            className={`flex items-center gap-2 px-3 py-2 rounded-xl text-slate-500 hover:text-yellow-400 hover:bg-yellow-950/20 border border-transparent hover:border-yellow-900/30 transition-all text-xs cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${isCollapsed ? "justify-center" : ""}`}
+            aria-label="Faire un don de soutien Buy Me A Coffee"
           >
             <Coffee size={13} />
-            {!collapsed && "Soutenir le projet"}
+            {!isCollapsed && "Soutenir le projet"}
           </a>
+          <Link
+            href="/about"
+            title="À propos & FAQ"
+            className={`flex items-center gap-2 px-3 py-2 rounded-xl text-slate-500 hover:text-white hover:bg-slate-800/50 border border-transparent hover:border-slate-800 transition-all text-xs cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${isCollapsed ? "justify-center" : ""}`}
+            aria-label="En savoir plus à propos de l'application et de la confidentialité"
+          >
+            <HelpCircle size={13} />
+            {!isCollapsed && "À propos & FAQ"}
+          </Link>
         </div>
       </div>
     </aside>

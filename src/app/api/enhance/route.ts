@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { z } from "zod";
+import { rateLimit } from "@/lib/rateLimit";
 
 const EnhanceRequestSchema = z.object({
   prompt: z.string().min(1, "Le prompt ne peut pas être vide").max(3000, "Le prompt est trop long (max 3000 caractères)"),
@@ -22,6 +23,23 @@ export async function POST(req: NextRequest) {
     
     if (!finalApiKey) {
       return NextResponse.json({ error: "Clé API manquante et aucune clé serveur configurée." }, { status: 400 });
+    }
+
+    // Rate Limiting
+    const ip = req.headers.get("x-forwarded-for") || "127.0.0.1";
+    const isUsingServerKey = !apiKey;
+    const limitResult = rateLimit(ip, isUsingServerKey ? 10 : 60, 60 * 1000);
+    
+    if (!limitResult.success) {
+      return NextResponse.json(
+        { error: "Trop de requêtes. Veuillez patienter une minute." },
+        { 
+          status: 429,
+          headers: {
+            "Retry-After": Math.ceil((limitResult.reset - Date.now()) / 1000).toString(),
+          }
+        }
+      );
     }
 
     const genAI = new GoogleGenerativeAI(finalApiKey);

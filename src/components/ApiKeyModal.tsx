@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { Key, ExternalLink, HelpCircle } from "lucide-react";
+import { Key, ExternalLink, HelpCircle, ShieldCheck } from "lucide-react";
 
 export function ApiKeyModal({ open, onOpenChange, onKeySaved }: { open: boolean, onOpenChange: (open: boolean) => void, onKeySaved: (key: string) => void }) {
   const [keyInput, setKeyInput] = useState("");
@@ -48,6 +48,10 @@ export function ApiKeyModal({ open, onOpenChange, onKeySaved }: { open: boolean,
           >
             Sauvegarder et Commencer
           </Button>
+          <p className="text-[10px] text-slate-500 flex items-center gap-1.5 mt-1">
+            <ShieldCheck size={11} className="text-green-500 flex-shrink-0" />
+            Stockée uniquement dans votre navigateur — jamais envoyée à nos serveurs.
+          </p>
         </div>
 
         <div className="mt-4 border-t border-slate-800/80 pt-4 flex flex-col gap-3">
