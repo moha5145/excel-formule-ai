@@ -7,6 +7,7 @@ const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-sans" });
 const calistoga = Calistoga({ weight: "400", subsets: ["latin"], variable: "--font-display" });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://excel-compta-ai.vercel.app"),
   title: "Excel-Compta AI — Formules Excel & Google Sheets en secondes",
   description: "Générez des formules Excel et Google Sheets complexes en langage naturel. Gratuit, privé, alimenté par Gemini AI. Idéal pour les comptables et financiers.",
   keywords: ["formules Excel", "Google Sheets", "IA", "comptabilité", "finance", "Gemini", "assistant comptable"],
@@ -15,6 +16,7 @@ export const metadata: Metadata = {
     title: "Excel-Compta AI — Formules Excel & Sheets générées par IA",
     description: "Décrivez votre besoin comptable en langage naturel. Notre IA génère la formule exacte pour Excel et Google Sheets en secondes.",
     siteName: "Excel-Compta AI",
+    images: [{ url: "/og-image.png", width: 1200, height: 630 }],
     locale: "fr_FR",
     type: "website",
   },
@@ -22,6 +24,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Excel-Compta AI",
     description: "Formules Excel & Google Sheets générées par IA en langage naturel. Gratuit et privé.",
+    images: ["/og-image.png"],
   },
   robots: {
     index: true,

@@ -8,6 +8,7 @@ import { findDemoResponse } from "@/lib/demoResponses";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface HistoryItem {
   prompt: string;
@@ -132,7 +133,7 @@ export function FormulaAssistant({
 
       setHistory((prev) => {
         const filtered = prev.filter((item) => item.prompt !== prompt);
-        return [{ prompt, response: streamResponse }, ...filtered].slice(0, 5);
+        return [{ prompt, response: streamResponse }, ...filtered].slice(0, 10);
       });
       if (onGenerateSuccess) onGenerateSuccess();
     } catch (err: any) {
@@ -143,7 +144,7 @@ export function FormulaAssistant({
           setIsDemoResponse(true);
           setHistory((prev) => {
             const filtered = prev.filter((item) => item.prompt !== prompt);
-            return [{ prompt, response: demoResult }, ...filtered].slice(0, 5);
+            return [{ prompt, response: demoResult }, ...filtered].slice(0, 10);
           });
         } else {
           setResponse("Veuillez entrer votre clé API (panneau gauche) pour utiliser l'assistant sur cette requête.");
@@ -284,6 +285,9 @@ export function FormulaAssistant({
             { label: "Mensualité d'un prêt de 250 000€ sur 20 ans à 3.5%", keywords: "mensualité prêt" },
             { label: "Retrouver un prix depuis une liste produit", keywords: "prix produit recherche" },
             { label: "Prime selon CA et marge avec SI imbriqués", keywords: "prime si condition marge" },
+            { label: "Calculer la TVA à 20% d'un montant HT", keywords: "tva taxe" },
+            { label: "Compter les factures impayées de plus de 1000€", keywords: "nb.si compter" },
+            { label: "Somme des ventes de la région Nord depuis le 01/01/2024", keywords: "somme.si sommer" },
           ].map((example, i) => (
             <button
               key={i}
@@ -337,6 +341,20 @@ export function FormulaAssistant({
           )}
         </Button>
       </div>
+
+      {/* Skeleton Loading State */}
+      {loading && !response && (
+        <div className="bg-slate-900/60 backdrop-blur-xl rounded-3xl border border-slate-800/80 p-8 shadow-xl flex flex-col gap-4 animate-in fade-in duration-300 mt-2">
+          <div className="flex items-center gap-2 mb-1">
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+            <span className="text-sm text-slate-400 font-medium">Rédaction de la formule...</span>
+          </div>
+          <Skeleton className="h-4 w-3/4 bg-slate-800" />
+          <Skeleton className="h-4 w-full bg-slate-800" />
+          <Skeleton className="h-24 w-full bg-slate-800/50 rounded-xl" />
+          <Skeleton className="h-4 w-1/2 bg-slate-800" />
+        </div>
+      )}
 
       {/* Résultat Gemini */}
       {response && (

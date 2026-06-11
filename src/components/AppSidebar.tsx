@@ -135,7 +135,7 @@ export function AppSidebar({
               </p>
             </div>
           ) : (
-            <div className="flex flex-col gap-1.5 overflow-y-auto max-h-[340px] pr-0.5">
+            <div className="flex flex-col gap-1.5 overflow-y-auto max-h-[420px] pr-0.5">
               {history.map((item, i) => (
                 <button
                   key={i}
