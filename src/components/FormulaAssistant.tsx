@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useEffect } from "react";
+import { isValidElement, useRef, useEffect, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Loader2, Copy, Check, Sparkles, Wand2, Undo2, Zap, Brain, Key, Download } from "lucide-react";
 import ReactMarkdown from "react-markdown";
@@ -24,6 +24,41 @@ export const FORMULA_EXAMPLES = [
   { label: "Trouver le salaire maximum des employés du service Marketing", keywords: "maximum" },
   { label: "Créer une liste déroulante dynamique pour restreindre la saisie", keywords: "validation" },
 ];
+
+const BLOCK_MARKDOWN_TAGS = new Set(["pre", "ul", "ol", "table", "blockquote", "h1", "h2", "h3", "h4", "h5", "h6"]);
+
+function normalizeMarkdownBlocks(markdown: string) {
+  const lines = markdown.replace(/\r\n/g, "\n").split("\n");
+  const output: string[] = [];
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    const isFence = /^\s*```/.test(line);
+
+    if (isFence) {
+      const previousLine = output[output.length - 1];
+      if (previousLine !== undefined && previousLine.trim() !== "") {
+        output.push("");
+      }
+
+      output.push(line);
+
+      const nextLine = lines[i + 1];
+      if (nextLine !== undefined && nextLine.trim() !== "" && !/^\s*```/.test(nextLine)) {
+        output.push("");
+      }
+    } else {
+      output.push(line);
+    }
+  }
+
+  return output.join("\n");
+}
+
+function hasBlockMarkdownChild(children?: ReactNode) {
+  const childArray = Array.isArray(children) ? children : children ? [children] : [];
+  return childArray.some((child) => isValidElement(child) && typeof child.type === "string" && BLOCK_MARKDOWN_TAGS.has(child.type));
+}
 
 interface FormulaInputBarProps {
   prompt: string;
@@ -59,6 +94,8 @@ export function FormulaInputBar({
   onSelectExample,
 }: FormulaInputBarProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [selectedExampleIndex, setSelectedExampleIndex] = useState(0);
+  const [exampleMenuOpen, setExampleMenuOpen] = useState(false);
   const isLimitReached = !apiKey && freeUsesLeft !== null && freeUsesLeft !== undefined && freeUsesLeft <= 0;
 
   // Auto-resize textarea logic
@@ -115,11 +152,11 @@ export function FormulaInputBar({
                 size="sm"
                 onClick={onEnhance}
                 disabled={enhancing || loading || !prompt.trim()}
-                className="h-8 text-[11px] text-primary hover:text-yellow-400 hover:bg-primary/10 rounded-lg px-2 flex items-center gap-1 cursor-pointer focus-visible:outline-none"
+                className="h-8 text-[11px] text-primary hover:text-yellow-400 hover:bg-primary/10 rounded-lg px-2 flex items-center gap-1 cursor-pointer focus-visible:outline-none sm:px-2 px-0 sm:w-auto w-8 justify-center"
                 aria-label="Améliorer la demande en langage naturel"
               >
                 {enhancing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Wand2 className="h-3 w-3" />}
-                Améliorer
+                <span className="hidden sm:inline">Améliorer</span>
               </Button>
 
               {previousPrompt && previousPrompt !== prompt && (
@@ -139,33 +176,63 @@ export function FormulaInputBar({
             <div className="flex items-center gap-3">
               {/* SELECT EXEMPLES */}
               {onSelectExample && (
-                <div className="relative w-32 sm:w-48 hidden sm:block">
+                <div className="relative w-8 sm:w-48">
                   <select
-                    className="w-full h-8 bg-transparent text-[11px] text-slate-400 hover:text-white border border-slate-800/60 rounded-lg px-2 pr-6 appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary/50 transition-colors truncate"
+                    className="hidden sm:block w-full h-8 bg-transparent text-[11px] text-slate-400 hover:text-white border border-slate-800/60 rounded-lg px-2 pr-6 appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary/50 transition-colors truncate"
+                    value={selectedExampleIndex}
                     onChange={(e) => {
-                      const idx = e.target.selectedIndex;
+                      const idx = Number(e.target.value);
                       if (idx > 0) {
                          onSelectExample(FORMULA_EXAMPLES[idx]);
-                         e.target.selectedIndex = 0;
+                         setSelectedExampleIndex(0);
                       }
                     }}
                   >
-                    <option value={0} disabled className="bg-slate-900">Exemples...</option>
+                    <option value={0} disabled className="bg-slate-900">Exemples</option>
                     {FORMULA_EXAMPLES.slice(1).map((ex, i) => (
                       <option key={i} value={i + 1} className="bg-slate-900 text-slate-200 truncate">{ex.label}</option>
                     ))}
                   </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-1.5 text-slate-500">
-                     <svg className="fill-current h-3 w-3" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" /></svg>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setExampleMenuOpen((open) => !open)}
+                    className="sm:hidden w-8 h-8 rounded-lg border border-slate-800/60 bg-slate-900/30 text-slate-400 hover:text-white hover:bg-slate-800/60 flex items-center justify-center cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary/50"
+                    aria-label="Sélectionner un exemple rapide"
+                    aria-expanded={exampleMenuOpen}
+                  >
+                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M4 6h16" />
+                      <path d="M4 12h16" />
+                      <path d="M4 18h10" />
+                    </svg>
+                  </button>
+                  {exampleMenuOpen && (
+                    <div className="absolute bottom-full right-0 z-50 mb-2 w-64 max-h-72 overflow-y-auto rounded-xl border border-slate-800 bg-slate-950 p-1 shadow-2xl">
+                      {FORMULA_EXAMPLES.slice(1).map((ex, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => {
+                            onSelectExample(ex);
+                            setSelectedExampleIndex(0);
+                            setExampleMenuOpen(false);
+                          }}
+                          className="w-full rounded-lg px-3 py-2 text-left text-xs text-slate-300 hover:bg-slate-800 hover:text-white"
+                        >
+                          {ex.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
               {isLimitReached && (
                 <button 
                   onClick={onRequestKeyModal} 
-                  className="text-[10px] text-red-400 bg-red-950/30 px-2 py-1 rounded-md border border-red-900/50 hover:bg-red-900/50 transition-colors animate-pulse cursor-pointer"
+                  className="text-[10px] text-red-400 bg-red-950/30 px-2 py-1 rounded-md border border-red-900/50 hover:bg-red-900/50 transition-colors animate-pulse cursor-pointer flex items-center gap-1 sm:px-2 sm:py-1 sm:gap-1 sm:w-auto w-8 h-8 justify-center p-0 sm:p-1"
                 >
-                  Essais épuisés
+                  <Key className="h-3.5 w-3.5 sm:hidden" />
+                  <span className="hidden sm:inline">Essais épuisés</span>
                 </button>
               )}
               <span className={`text-[10px] ${prompt.length >= 2700 ? "text-red-400 font-semibold animate-pulse" : "text-slate-500"}`}>
@@ -285,20 +352,26 @@ export function FormulaResultArea({
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
-                code({ node, inline, className, children, ...props }: any) {
+                p({ children }: { children?: ReactNode }) {
+                  if (hasBlockMarkdownChild(children)) {
+                    return <>{children}</>;
+                  }
+                  return <p>{children}</p>;
+                },
+                code({ inline, className, children }: { inline?: boolean; className?: string; children?: ReactNode }) {
                   return !inline ? (
                     <pre className="p-4 md:p-5 my-5 overflow-x-auto bg-slate-950/85 border border-slate-800/80 rounded-2xl text-yellow-300 font-mono text-sm md:text-base shadow-inner">
-                      <code className={className} {...props}>{children}</code>
+                      <code className={className}>{children}</code>
                     </pre>
                   ) : (
-                    <code className="bg-slate-800 text-yellow-250 px-1.5 py-0.5 rounded-md text-xs font-mono" {...props}>
+                    <code className="bg-slate-800 text-yellow-250 px-1.5 py-0.5 rounded-md text-xs font-mono" {...{} }>
                       {children}
                     </code>
                   );
                 },
               }}
             >
-              {response}
+              {normalizeMarkdownBlocks(response)}
             </ReactMarkdown>
           </div>
 

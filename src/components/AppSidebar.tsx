@@ -31,7 +31,7 @@ export function AppSidebar({
 }: AppSidebarProps & { isMobileDrawer?: boolean }) {
   const [collapsed, setCollapsed] = useState(false);
   const isCollapsed = isMobileDrawer ? false : collapsed;
-  
+
   // Use state from props if passed, otherwise use local hook state
   const [localHistory, setLocalHistory] = useLocalStorage<HistoryItem[]>("excel_compta_history", []);
   const history = propsHistory !== undefined ? propsHistory : localHistory;
@@ -45,17 +45,17 @@ export function AppSidebar({
 
   return (
     <aside
-      className={isMobileDrawer 
-        ? "relative w-full h-full flex flex-col bg-transparent" 
+          className={isMobileDrawer
+        ? "relative w-full h-full flex flex-col bg-transparent"
         : `relative flex-shrink-0 flex flex-col transition-all duration-300 ease-in-out
           ${isCollapsed ? "w-14" : "w-72"}
-          bg-slate-900/60 backdrop-blur-xl border-r border-slate-800/60 min-h-full`}
+          bg-slate-900/60 backdrop-blur-xl border-r border-slate-800/60 min-h-full overflow-visible`}
     >
       {/* Toggle collapse button */}
       {!isMobileDrawer && (
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="absolute -right-3 top-6 z-20 w-6 h-6 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-all shadow-md cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+          className="absolute right-2 bottom-3 z-20 w-6 h-6 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-all shadow-md cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
           title={isCollapsed ? "Ouvrir le panneau" : "Réduire le panneau"}
           aria-label={isCollapsed ? "Ouvrir la barre latérale" : "Réduire la barre latérale"}
         >
