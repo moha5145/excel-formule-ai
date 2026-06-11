@@ -5,8 +5,7 @@ import { toast } from "sonner";
 import { ApiKeyModal } from "@/components/ApiKeyModal";
 import { 
   FormulaInputBar, 
-  FormulaResultArea, 
-  FormulaExamples 
+  FormulaResultArea
 } from "@/components/FormulaAssistant";
 import { AppSidebar } from "@/components/AppSidebar";
 import { Menu } from "lucide-react";
@@ -275,24 +274,7 @@ export default function Home() {
                   </p>
                 </div>
 
-                {/* Examples */}
-                <FormulaExamples
-                  onSelectExample={(example) => {
-                    setPrompt(example.label);
-                    const demoResult = findDemoResponse(example.keywords);
-                    if (demoResult) {
-                      setResponse(demoResult);
-                      setIsDemoResponse(true);
-                      setHistory((prev) => {
-                        const filtered = prev.filter((item) => item.prompt !== example.label);
-                        return [{ prompt: example.label, response: demoResult }, ...filtered].slice(0, 10);
-                      });
-                    } else {
-                      setResponse("");
-                      setIsDemoResponse(false);
-                    }
-                  }}
-                />
+                {/* Examples moved to FormulaInputBar */}
               </div>
             ) : (
               <FormulaResultArea
@@ -322,6 +304,21 @@ export default function Home() {
           previousPrompt={previousPrompt}
           onUndoEnhance={() => { setPrompt(previousPrompt); setPreviousPrompt(""); }}
           apiKey={apiKey || ""}
+          onSelectExample={(example) => {
+            setPrompt(example.label);
+            const demoResult = findDemoResponse(example.keywords);
+            if (demoResult) {
+              setResponse(demoResult);
+              setIsDemoResponse(true);
+              setHistory((prev) => {
+                const filtered = prev.filter((item) => item.prompt !== example.label);
+                return [{ prompt: example.label, response: demoResult }, ...filtered].slice(0, 10);
+              });
+            } else {
+              setResponse("");
+              setIsDemoResponse(false);
+            }
+          }}
         />
       </main>
     </div>

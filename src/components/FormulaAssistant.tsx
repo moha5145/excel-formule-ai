@@ -11,43 +11,19 @@ interface ExampleItem {
   keywords: string;
 }
 
-export function FormulaExamples({
-  onSelectExample,
-}: {
-  onSelectExample: (example: ExampleItem) => void;
-}) {
-  const examples = [
-    { label: "Mensualité d'un prêt de 250 000€ sur 20 ans à 3.5%", keywords: "mensualité" },
-    { label: "Retrouver un prix depuis une liste produit", keywords: "prix" },
-    { label: "Prime selon CA et marge avec SI imbriqués", keywords: "prime" },
-    { label: "Calculer la TVA à 20% d'un montant HT", keywords: "tva" },
-    { label: "Compter les factures impayées de plus de 1000€", keywords: "nb.si" },
-    { label: "Somme des ventes de la région Nord depuis le 01/01/2024", keywords: "somme.si" },
-    { label: "Extraire l'année fiscale d'une date en cellule B2", keywords: "date" },
-    { label: "Convertir des minutes en heures et minutes (ex: 135 -> 2h15)", keywords: "texte" },
-    { label: "Trouver le salaire maximum des employés du service Marketing", keywords: "maximum" },
-    { label: "Créer une liste déroulante dynamique pour restreindre la saisie", keywords: "validation" },
-  ];
-
-  return (
-    <div className="w-full flex flex-col gap-4 animate-in fade-in duration-500 max-w-3xl mx-auto mt-6">
-      <div className="flex flex-wrap gap-2 justify-center">
-        {examples.map((example, i) => (
-          <button
-            key={i}
-            type="button"
-            onClick={() => onSelectExample(example)}
-            className="text-xs bg-slate-900/60 hover:bg-primary/20 hover:border-primary/40 hover:text-primary text-slate-300 border border-slate-800/80 rounded-full px-4 py-2.5 transition-all text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
-            title={example.label}
-            aria-label={`Remplir avec l'exemple : ${example.label}`}
-          >
-            {example.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
+export const FORMULA_EXAMPLES = [
+  { label: "Sélectionnez un exemple rapide...", keywords: "" },
+  { label: "Mensualité d'un prêt de 250 000€ sur 20 ans à 3.5%", keywords: "mensualité" },
+  { label: "Retrouver un prix depuis une liste produit", keywords: "prix" },
+  { label: "Prime selon CA et marge avec SI imbriqués", keywords: "prime" },
+  { label: "Calculer la TVA à 20% d'un montant HT", keywords: "tva" },
+  { label: "Compter les factures impayées de plus de 1000€", keywords: "nb.si" },
+  { label: "Somme des ventes de la région Nord depuis le 01/01/2024", keywords: "somme.si" },
+  { label: "Extraire l'année fiscale d'une date en cellule B2", keywords: "date" },
+  { label: "Convertir des minutes en heures et minutes (ex: 135 -> 2h15)", keywords: "texte" },
+  { label: "Trouver le salaire maximum des employés du service Marketing", keywords: "maximum" },
+  { label: "Créer une liste déroulante dynamique pour restreindre la saisie", keywords: "validation" },
+];
 
 interface FormulaInputBarProps {
   prompt: string;
@@ -63,6 +39,7 @@ interface FormulaInputBarProps {
   previousPrompt: string;
   onUndoEnhance: () => void;
   apiKey: string;
+  onSelectExample?: (example: { label: string; keywords: string }) => void;
 }
 
 export function FormulaInputBar({
@@ -79,6 +56,7 @@ export function FormulaInputBar({
   previousPrompt,
   onUndoEnhance,
   apiKey,
+  onSelectExample,
 }: FormulaInputBarProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isLimitReached = !apiKey && freeUsesLeft !== null && freeUsesLeft !== undefined && freeUsesLeft <= 0;
@@ -94,30 +72,7 @@ export function FormulaInputBar({
   return (
     <div className="w-full bg-slate-950/90 backdrop-blur-2xl border-t border-slate-800/80 py-4 px-6 flex-shrink-0 z-30">
       <div className="max-w-4xl mx-auto flex flex-col gap-2">
-        {/* Banner if no uses left */}
-        {!apiKey && freeUsesLeft !== undefined && freeUsesLeft !== null && freeUsesLeft <= 0 && (
-          <div className="p-4 rounded-xl border border-primary/30 bg-primary/10 flex items-start gap-4 animate-in fade-in zoom-in-95 duration-300">
-            <div className="p-2 rounded-lg bg-primary/20 text-primary">
-              <Key size={18} />
-            </div>
-            <div className="flex-1">
-              <h4 className="text-white font-medium text-sm mb-0.5">Vos essais gratuits sont épuisés !</h4>
-              <p className="text-xs text-slate-400 leading-relaxed mb-2.5">
-                Pour continuer à utiliser Excel-Compta AI de manière illimitée, veuillez ajouter votre clé API Gemini (100% gratuite et privée).
-              </p>
-              <div className="text-xs text-slate-300 bg-slate-900/50 p-2.5 rounded-lg border border-slate-700/40 flex items-center justify-between gap-4">
-                <span>Cliquez sur le bouton pour configurer votre clé.</span>
-                <Button 
-                  size="sm" 
-                  onClick={onRequestKeyModal} 
-                  className="h-7 px-3 text-[11px] bg-primary hover:bg-yellow-600 text-white cursor-pointer transition-all"
-                >
-                  Ajouter ma clé
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Banner removed: modal will handle it instead */}
 
         {/* Input area bubble */}
         <div className="relative flex flex-col bg-slate-900/60 border border-slate-700/40 rounded-2xl p-2.5 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 transition-all">
@@ -182,13 +137,44 @@ export function FormulaInputBar({
 
             {/* Right actions: Char count & Send button */}
             <div className="flex items-center gap-3">
+              {/* SELECT EXEMPLES */}
+              {onSelectExample && (
+                <div className="relative w-32 sm:w-48 hidden sm:block">
+                  <select
+                    className="w-full h-8 bg-transparent text-[11px] text-slate-400 hover:text-white border border-slate-800/60 rounded-lg px-2 pr-6 appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary/50 transition-colors truncate"
+                    onChange={(e) => {
+                      const idx = e.target.selectedIndex;
+                      if (idx > 0) {
+                         onSelectExample(FORMULA_EXAMPLES[idx]);
+                         e.target.selectedIndex = 0;
+                      }
+                    }}
+                  >
+                    <option value={0} disabled className="bg-slate-900">Exemples...</option>
+                    {FORMULA_EXAMPLES.slice(1).map((ex, i) => (
+                      <option key={i} value={i + 1} className="bg-slate-900 text-slate-200 truncate">{ex.label}</option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-1.5 text-slate-500">
+                     <svg className="fill-current h-3 w-3" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" /></svg>
+                  </div>
+                </div>
+              )}
+              {isLimitReached && (
+                <button 
+                  onClick={onRequestKeyModal} 
+                  className="text-[10px] text-red-400 bg-red-950/30 px-2 py-1 rounded-md border border-red-900/50 hover:bg-red-900/50 transition-colors animate-pulse cursor-pointer"
+                >
+                  Essais épuisés
+                </button>
+              )}
               <span className={`text-[10px] ${prompt.length >= 2700 ? "text-red-400 font-semibold animate-pulse" : "text-slate-500"}`}>
                 {prompt.length}/3000
               </span>
 
               <Button
                 onClick={onGenerate}
-                disabled={loading || !prompt.trim() || isLimitReached}
+                disabled={loading || !prompt.trim()}
                 size="icon"
                 className="h-8 w-8 bg-primary hover:bg-yellow-600 text-white rounded-lg shadow-md cursor-pointer transition-all disabled:opacity-50 shrink-0"
                 aria-label="Générer la formule Excel"
