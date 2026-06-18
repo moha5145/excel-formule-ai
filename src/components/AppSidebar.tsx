@@ -168,11 +168,11 @@ export function AppSidebar({
         {/* ── Section : Support ───────────────────── */}
         <div className="mt-auto pt-3 border-t border-slate-800/60 flex flex-col gap-1">
           <a
-            href="https://buymeacoffee.com/"
+            href={process.env.NEXT_PUBLIC_SUPPORT_URL || "https://buymeacoffee.com/"}
             target="_blank"
             rel="noreferrer"
             title="Soutenir le projet"
-            className={`flex items-center gap-2 px-3 py-2 rounded-xl text-slate-500 hover:text-yellow-400 hover:bg-yellow-950/20 border border-transparent hover:border-yellow-900/30 transition-all text-xs cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${isCollapsed ? "justify-center" : ""}`}
+            className={`flex items-center gap-2 px-3 py-2 rounded-xl text-yellow-400 bg-yellow-950/30 border border-yellow-700/40 hover:bg-yellow-950/50 hover:border-yellow-600/60 hover:text-yellow-300 shadow-[0_0_12px_-4px_rgba(250,204,21,0.15)] transition-all text-xs cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${isCollapsed ? "justify-center" : ""}`}
             aria-label="Faire un don de soutien Buy Me A Coffee"
           >
             <Coffee size={13} />
