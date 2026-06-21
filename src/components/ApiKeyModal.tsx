@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -8,11 +8,6 @@ import { Key, ExternalLink, HelpCircle, ShieldCheck } from "lucide-react";
 export function ApiKeyModal({ open, onOpenChange, onKeySaved }: { open: boolean, onOpenChange: (open: boolean) => void, onKeySaved: (key: string) => void }) {
   const [keyInput, setKeyInput] = useState("");
 
-  // Clear input when opened
-  useEffect(() => {
-    if (open) setKeyInput("");
-  }, [open]);
-
   const handleSave = () => {
     if (keyInput.trim()) {
       onKeySaved(keyInput.trim());
@@ -20,7 +15,7 @@ export function ApiKeyModal({ open, onOpenChange, onKeySaved }: { open: boolean,
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(next) => { if (next) setKeyInput(""); onOpenChange(next); }}>
       <DialogContent className="sm:max-w-md p-8 bg-slate-900 border border-slate-800 shadow-2xl rounded-2xl">
         <DialogTitle className="sr-only">Configuration de la clé API</DialogTitle>
         <div className="flex items-center gap-3 text-primary mb-2">
@@ -72,11 +67,11 @@ export function ApiKeyModal({ open, onOpenChange, onKeySaved }: { open: boolean,
               </a>
             </li>
             <li>Connectez-vous avec votre compte Google gratuit.</li>
-            <li>Cliquez sur le bouton bleu <span className="text-slate-300 font-medium">"Create API Key"</span>.</li>
+            <li>Cliquez sur le bouton bleu <span className="text-slate-300 font-medium">&ldquo;Create API Key&rdquo;</span>.</li>
             <li>Copiez la clé générée et collez-la ci-dessus.</li>
           </ol>
           <p className="text-[10px] text-slate-500 leading-normal italic mt-1">
-            Note : Google AI Studio propose un accès gratuit généreux largement suffisant pour un usage quotidien d'Excel-Compta AI.
+            Note : Google AI Studio propose un accès gratuit généreux largement suffisant pour un usage quotidien d&apos;Excel-Compta AI.
           </p>
         </div>
       </DialogContent>

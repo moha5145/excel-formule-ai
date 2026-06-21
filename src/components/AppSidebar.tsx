@@ -1,8 +1,7 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Key, ExternalLink, HelpCircle, History, Trash2, ChevronLeft, ChevronRight, Coffee, LogOut, Zap, Brain } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Key, HelpCircle, History, Trash2, ChevronLeft, ChevronRight, Coffee, LogOut } from "lucide-react";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { toast } from "sonner";
 
@@ -29,12 +28,14 @@ export function AppSidebar({
   history: propsHistory,
   setHistory: propsSetHistory,
 }: AppSidebarProps & { isMobileDrawer?: boolean }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { const id = setTimeout(() => setMounted(true), 0); return () => clearTimeout(id); }, []);
   const [collapsed, setCollapsed] = useState(false);
   const isCollapsed = isMobileDrawer ? false : collapsed;
 
   // Use state from props if passed, otherwise use local hook state
   const [localHistory, setLocalHistory] = useLocalStorage<HistoryItem[]>("excel_compta_history", []);
-  const history = propsHistory !== undefined ? propsHistory : localHistory;
+  const history = !mounted ? [] : (propsHistory !== undefined ? propsHistory : localHistory);
   const setHistory = propsSetHistory !== undefined ? propsSetHistory : setLocalHistory;
 
   const handleClearHistory = () => {
@@ -73,7 +74,7 @@ export function AppSidebar({
             </p>
           )}
 
-          {apiKey ? (
+          {apiKey && mounted ? (
             <div className={`flex ${isCollapsed ? "flex-col gap-2" : "gap-2"} items-center`}>
               <div className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-xl bg-green-950/30 border border-green-800/40 text-green-400 text-xs ${isCollapsed ? "justify-center" : ""}`}>
                 <Key size={12} />

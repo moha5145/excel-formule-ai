@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { AlertTriangle, RotateCcw, Home } from "lucide-react";
+import * as Sentry from "@sentry/nextjs";
 
 interface ErrorProps {
   error: Error & { digest?: string };
@@ -13,6 +14,7 @@ interface ErrorProps {
 export default function Error({ error, reset, unstable_retry }: ErrorProps) {
   useEffect(() => {
     console.error("Application Error Boundary caught an error:", error);
+    Sentry.captureException(error);
   }, [error]);
 
   const handleRetry = () => {
@@ -38,7 +40,7 @@ export default function Error({ error, reset, unstable_retry }: ErrorProps) {
           <h2 className="text-4xl font-display text-white">Erreur</h2>
           <h3 className="text-lg font-semibold text-slate-200">Une anomalie est survenue</h3>
           <p className="text-slate-400 text-sm leading-relaxed">
-            Une erreur inattendue a perturbé l'exécution de l'application. Nos équipes ont été notifiées.
+            Une erreur inattendue a perturbé l&apos;exécution de l&apos;application. Nos équipes ont été notifiées.
           </p>
 
           {/* Affichage sécurisé de l'erreur */}

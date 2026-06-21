@@ -10,7 +10,6 @@ import {
 import { AppSidebar } from "@/components/AppSidebar";
 import { Menu } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { findDemoResponse } from "@/lib/demoResponses";
 
 interface HistoryItem {
   prompt: string;
@@ -19,8 +18,8 @@ interface HistoryItem {
 
 export default function Home() {
   const [apiKey, setApiKey] = useLocalStorage<string | null>("gemini_api_key", null);
-  const [demoUsesLeft, setDemoUsesLeft] = useLocalStorage<number>("excel_compta_demo_uses", 2);
   const [modelChoice, setModelChoice] = useLocalStorage<"flash" | "pro">("excel_compta_model", "flash");
+  const [dailyFreeRemaining, setDailyFreeRemaining] = useState<number | null>(5);
   const [isKeyModalOpen, setIsKeyModalOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -30,7 +29,6 @@ export default function Home() {
   const [enhancing, setEnhancing] = useState(false);
   const [response, setResponse] = useState("");
   const [copied, setCopied] = useState(false);
-  const [isDemoResponse, setIsDemoResponse] = useState(false);
   const [previousPrompt, setPreviousPrompt] = useState("");
   const [history, setHistory] = useLocalStorage<HistoryItem[]>("excel_compta_history", []);
 
@@ -40,7 +38,6 @@ export default function Home() {
   const handleRestoreItem = useCallback((item: HistoryItem) => {
     setPrompt(item.prompt);
     setResponse(item.response);
-    setIsDemoResponse(false);
   }, []);
 
   // Copy result
@@ -71,20 +68,34 @@ export default function Home() {
   const handleEnhance = useCallback(async () => {
     if (!prompt.trim() || enhancing || loading) return;
     setPreviousPrompt(prompt);
-    setIsDemoResponse(false);
     setEnhancing(true);
     try {
       const res = await fetch("/api/enhance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, apiKey }),
+        body: JSON.stringify({ prompt, ...(apiKey ? { apiKey } : {}) }),
       });
+
+      const freeRemainingHeader = res.headers.get("X-Free-Remaining");
+      if (freeRemainingHeader !== null) {
+        setDailyFreeRemaining(Number(freeRemainingHeader));
+      }
+
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      if (!res.ok) {
+        if (res.status === 429) {
+          setDailyFreeRemaining(0);
+          if (!apiKey) {
+            setIsKeyModalOpen(true);
+            return;
+          }
+        }
+        throw new Error(data.error);
+      }
       setPrompt(data.result);
       toast.success("Demande améliorée avec succès !");
-    } catch (err: any) {
-      toast.error(err.message || "Erreur lors de l'amélioration.");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Erreur lors de l'amélioration.");
     } finally {
       setEnhancing(false);
     }
@@ -93,29 +104,45 @@ export default function Home() {
   // Generate formula
   const handleGenerate = useCallback(async () => {
     if (!prompt.trim() || loading) return;
-    const isLimitReached = !apiKey && demoUsesLeft <= 0;
-    if (isLimitReached) {
+
+    if (!apiKey && dailyFreeRemaining !== null && dailyFreeRemaining <= 0) {
       setIsKeyModalOpen(true);
       return;
     }
+
     setLoading(true);
     setResponse("");
-    setIsDemoResponse(false);
     try {
       const res = await fetch("/api/gemini", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, apiKey, modelChoice }),
+        body: JSON.stringify({ prompt, modelChoice, ...(apiKey ? { apiKey } : {}) }),
       });
-      
+
+      const freeRemainingHeader = res.headers.get("X-Free-Remaining");
+      if (freeRemainingHeader !== null) {
+        setDailyFreeRemaining(Number(freeRemainingHeader));
+      }
+
       if (!res.ok) {
         const contentType = res.headers.get("content-type");
+        let errorMsg: string;
         if (contentType && contentType.includes("application/json")) {
           const data = await res.json();
-          throw new Error(data.error);
+          errorMsg = data.error;
         } else {
-          throw new Error("Erreur serveur lors de la génération.");
+          errorMsg = "Erreur serveur lors de la génération.";
         }
+
+        if (res.status === 429) {
+          setDailyFreeRemaining(0);
+          if (!apiKey) {
+            setIsKeyModalOpen(true);
+            return;
+          }
+        }
+
+        throw new Error(errorMsg);
       }
 
       const reader = res.body?.getReader();
@@ -123,7 +150,7 @@ export default function Home() {
 
       const decoder = new TextDecoder();
       let streamResponse = "";
-      
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -136,31 +163,12 @@ export default function Home() {
         const filtered = prev.filter((item) => item.prompt !== prompt);
         return [{ prompt, response: streamResponse }, ...filtered].slice(0, 10);
       });
-      
-      if (!apiKey) {
-        setDemoUsesLeft((prev) => Math.max(0, prev - 1));
-      }
-    } catch (err: any) {
-      if (!apiKey) {
-        const demoResult = findDemoResponse(prompt);
-        if (demoResult) {
-          setResponse(demoResult);
-          setIsDemoResponse(true);
-          setHistory((prev) => {
-            const filtered = prev.filter((item) => item.prompt !== prompt);
-            return [{ prompt, response: demoResult }, ...filtered].slice(0, 10);
-          });
-        } else {
-          setResponse("Veuillez entrer votre clé API (panneau gauche) pour utiliser l'assistant sur cette requête.");
-        }
-        setDemoUsesLeft((prev) => Math.max(0, prev - 1));
-      } else {
-        toast.error(err.message || "Une erreur est survenue.");
-      }
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Une erreur est survenue.");
     } finally {
       setLoading(false);
     }
-  }, [prompt, apiKey, modelChoice, demoUsesLeft, setHistory, setDemoUsesLeft]);
+  }, [prompt, apiKey, modelChoice, dailyFreeRemaining, loading, setHistory]);
 
   // Keyboard Shortcuts (Ctrl+Enter / Cmd+Enter to generate, Ctrl+Shift+E / Cmd+Shift+E to enhance)
   useEffect(() => {
@@ -280,7 +288,6 @@ export default function Home() {
               <FormulaResultArea
                 response={response}
                 loading={loading}
-                isDemoResponse={isDemoResponse}
                 copied={copied}
                 onCopy={handleCopy}
                 onDownload={handleDownload}
@@ -299,25 +306,14 @@ export default function Home() {
           onEnhance={handleEnhance}
           modelChoice={modelChoice}
           onModelChange={setModelChoice}
-          freeUsesLeft={apiKey ? null : demoUsesLeft}
+          dailyFreeRemaining={dailyFreeRemaining}
           onRequestKeyModal={() => setIsKeyModalOpen(true)}
           previousPrompt={previousPrompt}
           onUndoEnhance={() => { setPrompt(previousPrompt); setPreviousPrompt(""); }}
           apiKey={apiKey || ""}
           onSelectExample={(example) => {
             setPrompt(example.label);
-            const demoResult = findDemoResponse(example.keywords);
-            if (demoResult) {
-              setResponse(demoResult);
-              setIsDemoResponse(true);
-              setHistory((prev) => {
-                const filtered = prev.filter((item) => item.prompt !== example.label);
-                return [{ prompt: example.label, response: demoResult }, ...filtered].slice(0, 10);
-              });
-            } else {
-              setResponse("");
-              setIsDemoResponse(false);
-            }
+            setResponse("");
           }}
         />
       </main>

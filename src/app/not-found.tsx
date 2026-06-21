@@ -21,7 +21,7 @@ export default function NotFound() {
           <h2 className="text-4xl font-display text-white">404</h2>
           <h3 className="text-lg font-semibold text-slate-200">Formule introuvable</h3>
           <p className="text-slate-400 text-sm leading-relaxed">
-            La cellule ou l'adresse que vous tentez de joindre n'existe pas ou a été déplacée dans un autre classeur.
+            La cellule ou l&apos;adresse que vous tentez de joindre n&apos;existe pas ou a été déplacée dans un autre classeur.
           </p>
         </div>
 
@@ -30,7 +30,7 @@ export default function NotFound() {
           className="w-full flex items-center justify-center gap-2 text-sm font-medium text-white bg-primary hover:bg-yellow-600 border border-transparent rounded-xl py-3.5 transition-all shadow-lg shadow-primary/20 hover:shadow-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
           aria-label="Retourner à l'accueil"
         >
-          <ArrowLeft size={16} /> Retour à l'assistant
+          <ArrowLeft size={16} /> Retour à l&apos;assistant
         </Link>
       </div>
     </div>

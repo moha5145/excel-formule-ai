@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, Shield, ShieldCheck, HelpCircle, HardDrive, RefreshCw } from "lucide-react";
+import { ArrowLeft, ShieldCheck, HelpCircle, HardDrive, RefreshCw } from "lucide-react";
 
 export const metadata = {
   title: "À propos — Excel-Compta AI",
@@ -54,7 +54,7 @@ export default function AboutPage() {
             </div>
             <h3 className="text-white font-semibold text-base">Clé API locale</h3>
             <p className="text-slate-400 text-xs leading-relaxed">
-              Votre clé API Gemini est stockée uniquement en local dans votre navigateur (LocalStorage). Elle n'est jamais sauvegardée sur nos serveurs.
+              Votre clé API Gemini est stockée uniquement en local dans votre navigateur (LocalStorage). Elle n&apos;est jamais sauvegardée sur nos serveurs.
             </p>
           </div>
 
@@ -64,7 +64,7 @@ export default function AboutPage() {
             </div>
             <h3 className="text-white font-semibold text-base">Stateless</h3>
             <p className="text-slate-400 text-xs leading-relaxed">
-              L'application est entièrement sans état. Aucune base de données ne conserve vos requêtes financières ou vos formules en dehors de votre historique local.
+              L&apos;application est entièrement sans état. Aucune base de données ne conserve vos requêtes financières ou vos formules en dehors de votre historique local.
             </p>
           </div>
 
@@ -74,7 +74,7 @@ export default function AboutPage() {
             </div>
             <h3 className="text-white font-semibold text-base">Contrôle total</h3>
             <p className="text-slate-400 text-xs leading-relaxed">
-              Vous pouvez à tout moment retirer votre clé API ou vider l'historique de vos requêtes récentes en un clic depuis le panneau de contrôle de gauche.
+              Vous pouvez à tout moment retirer votre clé API ou vider l&apos;historique de vos requêtes récentes en un clic depuis le panneau de contrôle de gauche.
             </p>
           </div>
         </div>
@@ -90,7 +90,7 @@ export default function AboutPage() {
             <div className="border-b border-slate-800/60 pb-6">
               <h4 className="text-white font-medium text-base mb-2">Comment fonctionne le mode Démo gratuit ?</h4>
               <p className="text-slate-400 text-sm leading-relaxed">
-                Le mode Démo gratuit utilise une base de données locale intelligente pour reconnaître les requêtes les plus courantes des comptables (TVA, SOMME.SI, RECHERCHEX, etc.) sans nécessiter de clé API. Il permet de tester l'ergonomie de l'application immédiatement.
+                Le mode Démo gratuit utilise une base de données locale intelligente pour reconnaître les requêtes les plus courantes des comptables (TVA, SOMME.SI, RECHERCHEX, etc.) sans nécessiter de clé API. Il permet de tester l&apos;ergonomie de l&apos;application immédiatement.
               </p>
             </div>
 
@@ -104,14 +104,14 @@ export default function AboutPage() {
             <div className="border-b border-slate-800/60 pb-6">
               <h4 className="text-white font-medium text-base mb-2">Mes données comptables sont-elles partagées ?</h4>
               <p className="text-slate-400 text-sm leading-relaxed">
-                Non. Les requêtes saisies pour générer des formules transitent de manière sécurisée et chiffrée vers l'API officielle de Google Gemini. L'application elle-même ne collecte aucune donnée personnelle ou financière.
+                Non. Les requêtes saisies pour générer des formules transitent de manière sécurisée et chiffrée vers l&apos;API officielle de Google Gemini. L&apos;application elle-même ne collecte aucune donnée personnelle ou financière.
               </p>
             </div>
 
             <div>
               <h4 className="text-white font-medium text-base mb-2">Quelle est la différence entre les modèles Flash et Pro ?</h4>
               <p className="text-slate-400 text-sm leading-relaxed">
-                <strong>Gemini Flash</strong> est optimisé pour être extrêmement rapide sur les formules simples. <strong>Gemini Pro</strong> dispose d'un raisonnement mathématique et logique supérieur, parfait pour les calculs imbriqués complexes, le débogage de macros VBA ou de scripts complexes.
+                <strong>Gemini Flash</strong> est optimisé pour être extrêmement rapide sur les formules simples. <strong>Gemini Pro</strong> dispose d&apos;un raisonnement mathématique et logique supérieur, parfait pour les calculs imbriqués complexes, le débogage de macros VBA ou de scripts complexes.
               </p>
             </div>
           </div>
@@ -124,7 +124,7 @@ export default function AboutPage() {
           </span>
           <div className="flex gap-4">
             <a href="https://aistudio.google.com/support" target="_blank" rel="noreferrer" className="hover:text-slate-300 transition-colors">Support Google AI Studio</a>
-            <Link href="/" className="hover:text-slate-300 transition-colors">Retour à l'assistant</Link>
+            <Link href="/" className="hover:text-slate-300 transition-colors">Retour à l&apos;assistant</Link>
           </div>
         </div>
       </main>

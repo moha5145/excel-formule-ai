@@ -1,15 +1,10 @@
 "use client";
-import { isValidElement, useRef, useEffect, useState, type ReactNode } from "react";
+import { useRef, useEffect, useState, useCallback, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Loader2, Copy, Check, Sparkles, Wand2, Undo2, Zap, Brain, Key, Download } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Skeleton } from "@/components/ui/skeleton";
-
-interface ExampleItem {
-  label: string;
-  keywords: string;
-}
 
 export const FORMULA_EXAMPLES = [
   { label: "Sélectionnez un exemple rapide...", keywords: "" },
@@ -24,8 +19,6 @@ export const FORMULA_EXAMPLES = [
   { label: "Trouver le salaire maximum des employés du service Marketing", keywords: "maximum" },
   { label: "Créer une liste déroulante dynamique pour restreindre la saisie", keywords: "validation" },
 ];
-
-const BLOCK_MARKDOWN_TAGS = new Set(["pre", "ul", "ol", "table", "blockquote", "h1", "h2", "h3", "h4", "h5", "h6"]);
 
 function normalizeMarkdownBlocks(markdown: string) {
   const lines = markdown.replace(/\r\n/g, "\n").split("\n");
@@ -55,10 +48,6 @@ function normalizeMarkdownBlocks(markdown: string) {
   return output.join("\n");
 }
 
-function hasBlockMarkdownChild(children?: ReactNode) {
-  const childArray = Array.isArray(children) ? children : children ? [children] : [];
-  return childArray.some((child) => isValidElement(child) && typeof child.type === "string" && BLOCK_MARKDOWN_TAGS.has(child.type));
-}
 
 interface FormulaInputBarProps {
   prompt: string;
@@ -69,7 +58,7 @@ interface FormulaInputBarProps {
   onEnhance: () => void;
   modelChoice: "flash" | "pro";
   onModelChange?: (model: "flash" | "pro") => void;
-  freeUsesLeft?: number | null;
+  dailyFreeRemaining?: number | null;
   onRequestKeyModal?: () => void;
   previousPrompt: string;
   onUndoEnhance: () => void;
@@ -86,7 +75,7 @@ export function FormulaInputBar({
   onEnhance,
   modelChoice,
   onModelChange,
-  freeUsesLeft,
+  dailyFreeRemaining,
   onRequestKeyModal,
   previousPrompt,
   onUndoEnhance,
@@ -96,7 +85,6 @@ export function FormulaInputBar({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [selectedExampleIndex, setSelectedExampleIndex] = useState(0);
   const [exampleMenuOpen, setExampleMenuOpen] = useState(false);
-  const isLimitReached = !apiKey && freeUsesLeft !== null && freeUsesLeft !== undefined && freeUsesLeft <= 0;
 
   // Auto-resize textarea logic
   useEffect(() => {
@@ -141,7 +129,7 @@ export function FormulaInputBar({
                     type="button"
                     onClick={() => onModelChange("pro")}
                     className={`flex items-center gap-1 px-2.5 py-1 rounded-md transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary ${modelChoice === "pro" ? "bg-gradient-to-r from-yellow-600 to-yellow-500 text-white font-medium shadow-sm" : "text-slate-400 hover:text-white"}`}
-                    title="Modèle expert pour requêtes complexes (Gemini 3.5 Pro)"
+                    title="Modèle expert pour requêtes complexes (Gemini 3.1 Pro)"
                   >
                     <Brain size={11} /> Pro
                   </button>
@@ -183,8 +171,8 @@ export function FormulaInputBar({
                     onChange={(e) => {
                       const idx = Number(e.target.value);
                       if (idx > 0) {
-                         onSelectExample(FORMULA_EXAMPLES[idx]);
-                         setSelectedExampleIndex(0);
+                        onSelectExample(FORMULA_EXAMPLES[idx]);
+                        setSelectedExampleIndex(0);
                       }
                     }}
                   >
@@ -208,7 +196,7 @@ export function FormulaInputBar({
                   </button>
                   {exampleMenuOpen && (
                     <>
-                      <div 
+                      <div
                         className="fixed inset-0 z-40 bg-black/50"
                         onClick={() => setExampleMenuOpen(false)}
                         aria-hidden="true"
@@ -233,15 +221,19 @@ export function FormulaInputBar({
                   )}
                 </div>
               )}
-              {isLimitReached && (
-                <button 
-                  onClick={onRequestKeyModal} 
-                  className="text-[10px] text-red-400 bg-red-950/30 px-2 py-1 rounded-md border border-red-900/50 hover:bg-red-900/50 transition-colors animate-pulse cursor-pointer flex items-center gap-1 sm:px-2 sm:py-1 sm:gap-1 sm:w-auto w-8 h-8 justify-center p-0 sm:p-1"
+              {!apiKey && dailyFreeRemaining !== null && dailyFreeRemaining !== undefined && (dailyFreeRemaining > 0 ? (
+                <span className="text-[10px] font-medium px-2 py-1 rounded-md text-green-400 bg-green-950/20 border border-green-900/30">
+                  {dailyFreeRemaining}/5 aujourd&apos;hui
+                </span>
+              ) : (
+                <button
+                  onClick={onRequestKeyModal}
+                  className="text-[10px] font-medium px-2 py-1 rounded-md text-red-400 bg-red-950/30 border border-red-900/50 animate-pulse cursor-pointer hover:bg-red-900/50 transition-colors"
                 >
-                  <Key className="h-3.5 w-3.5 sm:hidden" />
-                  <span className="hidden sm:inline">Essais épuisés</span>
+                  <Key className="h-3 w-3 inline mr-1" />
+                  Limite atteinte
                 </button>
-              )}
+              ))}
               <span className={`text-[10px] ${prompt.length >= 2700 ? "text-red-400 font-semibold animate-pulse" : "text-slate-500"}`}>
                 {prompt.length}/3000
               </span>
@@ -275,7 +267,6 @@ export function FormulaInputBar({
 interface FormulaResultAreaProps {
   response: string;
   loading: boolean;
-  isDemoResponse: boolean;
   copied: boolean;
   onCopy: () => void;
   onDownload: () => void;
@@ -284,12 +275,18 @@ interface FormulaResultAreaProps {
 export function FormulaResultArea({
   response,
   loading,
-  isDemoResponse,
   copied,
   onCopy,
   onDownload,
 }: FormulaResultAreaProps) {
   const resultRef = useRef<HTMLDivElement>(null);
+  const [formulaCopied, setFormulaCopied] = useState(false);
+
+  const handleCopyFormula = useCallback(async (text: string) => {
+    await navigator.clipboard.writeText(text);
+    setFormulaCopied(true);
+    setTimeout(() => setFormulaCopied(false), 2000);
+  }, []);
 
   // Auto scroll to results when loaded or updated
   useEffect(() => {
@@ -316,8 +313,8 @@ export function FormulaResultArea({
 
       {/* Résultat Gemini */}
       {response && (
-        <div 
-          ref={resultRef} 
+        <div
+          ref={resultRef}
           className="bg-slate-900/80 backdrop-blur-xl rounded-3xl border border-primary/20 p-6 md:p-8 shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95 duration-500"
         >
           <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-primary to-transparent opacity-70" />
@@ -326,33 +323,7 @@ export function FormulaResultArea({
             <h3 className="text-primary font-semibold text-lg md:text-xl flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-primary" />
               Résultat &amp; Explication
-              {isDemoResponse && (
-                <span className="text-xs font-normal bg-slate-800 text-slate-400 border border-slate-700 px-2 py-0.5 rounded-full ml-2">
-                  Aperçu démo
-                </span>
-              )}
             </h3>
-            <div className="flex gap-2 w-full sm:w-auto">
-              <Button
-                variant="outline"
-                onClick={onCopy}
-                className="flex-1 sm:flex-initial border-slate-700 bg-slate-800/50 hover:bg-slate-700 active:scale-95 text-white rounded-xl transition-all h-9 px-3 text-xs cursor-pointer focus-visible:outline-none"
-              >
-                {copied ? (
-                  <><Check size={14} className="text-green-500 mr-1.5" /> Copié</>
-                ) : (
-                  <><Copy size={14} className="mr-1.5" /> Copier la formule</>
-                )}
-              </Button>
-              <Button
-                variant="outline"
-                onClick={onDownload}
-                className="flex-1 sm:flex-initial border-slate-700 bg-slate-800/50 hover:bg-slate-700 active:scale-95 text-white rounded-xl transition-all h-9 px-3 text-xs cursor-pointer focus-visible:outline-none"
-                title="Télécharger la réponse (.txt)"
-              >
-                <Download size={14} className="mr-1.5" /> Télécharger
-              </Button>
-            </div>
           </div>
 
           <div className="prose prose-invert prose-p:text-slate-350 prose-a:text-primary hover:prose-a:text-yellow-400 prose-strong:text-white prose-li:text-slate-300 max-w-none text-sm md:text-base leading-relaxed">
@@ -362,11 +333,18 @@ export function FormulaResultArea({
                 p: ({ children }: { children?: ReactNode }) => <>{children}</>,
                 code({ inline, className, children }: { inline?: boolean; className?: string; children?: ReactNode }) {
                   return !inline ? (
-                    <pre className="p-4 md:p-5 my-5 overflow-x-auto bg-slate-950/85 border border-slate-800/80 rounded-2xl text-yellow-300 font-mono text-sm md:text-base shadow-inner">
+                    <pre className="relative p-4 md:p-5 my-5 overflow-x-auto bg-slate-950/85 border border-slate-800/80 rounded-2xl text-yellow-300 font-mono text-sm md:text-base shadow-inner group">
+                      <button
+                        onClick={() => handleCopyFormula(String(children))}
+                        className="absolute top-2 right-2 p-1.5 rounded-lg bg-slate-800/80 border border-slate-700/50 text-slate-400 hover:text-yellow-300 hover:bg-slate-700/80 opacity-0 group-hover:opacity-100 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                        aria-label="Copier la formule"
+                      >
+                        {formulaCopied ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+                      </button>
                       <code className={className}>{children}</code>
                     </pre>
                   ) : (
-                    <code className="bg-slate-800 text-yellow-250 px-1.5 py-0.5 rounded-md text-xs font-mono" {...{} }>
+                    <code className="bg-slate-800 text-yellow-250 px-1.5 py-0.5 rounded-md text-xs font-mono" {...{}}>
                       {children}
                     </code>
                   );
@@ -377,15 +355,35 @@ export function FormulaResultArea({
             </ReactMarkdown>
           </div>
 
-          {!isDemoResponse && (
-            <div className="mt-6 flex items-start gap-3 p-4 bg-slate-800/40 rounded-2xl border border-slate-700/50">
-              <span className="text-yellow-500 text-base flex-shrink-0">⚠️</span>
-              <p className="text-[11px] text-slate-400 leading-relaxed">
-                <span className="text-slate-300 font-medium">Vérifiez avant d'utiliser en production.</span>{" "}
-                Les formules générées par IA peuvent contenir des erreurs. Testez toujours sur un jeu de données réel avant de l'intégrer à vos fichiers comptables officiels.
-              </p>
-            </div>
-          )}
+          <div className="mt-6 flex items-start gap-3 p-4 bg-slate-800/40 rounded-2xl border border-slate-700/50">
+            <span className="text-yellow-500 text-base flex-shrink-0">⚠️</span>
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              <span className="text-slate-300 font-medium">Vérifiez avant d&apos;utiliser en production.</span>{" "}
+              Les formules générées par IA peuvent contenir des erreurs. Testez toujours sur un jeu de données réel avant de l&apos;intégrer à vos fichiers comptables officiels.
+            </p>
+          </div>
+
+          <div className="flex gap-2 w-full mt-6">
+            <Button
+              variant="outline"
+              onClick={onCopy}
+              className="flex-1 border-slate-700 bg-slate-800/50 hover:bg-slate-700 active:scale-95 text-white rounded-xl transition-all h-9 px-3 text-xs cursor-pointer focus-visible:outline-none"
+            >
+              {copied ? (
+                <><Check size={14} className="text-green-500 mr-1.5" /> Copié</>
+              ) : (
+                <><Copy size={14} className="mr-1.5" /> Copier la formule</>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={onDownload}
+              className="flex-1 border-slate-700 bg-slate-800/50 hover:bg-slate-700 active:scale-95 text-white rounded-xl transition-all h-9 px-3 text-xs cursor-pointer focus-visible:outline-none"
+              title="Télécharger la réponse (.txt)"
+            >
+              <Download size={14} className="mr-1.5" /> Télécharger
+            </Button>
+          </div>
         </div>
       )}
     </div>
