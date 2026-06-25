@@ -35,6 +35,19 @@ export default function Home() {
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
+  // Fetch real daily free remaining on mount (not just default 5)
+  useEffect(() => {
+    if (apiKey) return; // no need to check for users with own key
+    fetch("/api/quota")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && typeof data.remaining === "number") {
+          setDailyFreeRemaining(data.remaining);
+        }
+      })
+      .catch(() => {});
+  }, [apiKey]);
+
   // Restore item from history
   const handleRestoreItem = useCallback((item: HistoryItem) => {
     setPrompt(item.prompt);

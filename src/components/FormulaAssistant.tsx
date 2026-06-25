@@ -84,6 +84,7 @@ export function FormulaInputBar({
 }: FormulaInputBarProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [selectedExampleIndex, setSelectedExampleIndex] = useState(0);
+  const [selectedExampleLabel, setSelectedExampleLabel] = useState<string | null>(null);
   const [exampleMenuOpen, setExampleMenuOpen] = useState(false);
 
   // Auto-resize textarea logic
@@ -172,11 +173,14 @@ export function FormulaInputBar({
                       const idx = Number(e.target.value);
                       if (idx > 0) {
                         onSelectExample(FORMULA_EXAMPLES[idx]);
+                        setSelectedExampleLabel(FORMULA_EXAMPLES[idx].label);
                         setSelectedExampleIndex(0);
                       }
                     }}
                   >
-                    <option value={0} disabled className="bg-slate-900">Exemples</option>
+                    <option value={0} disabled className="bg-slate-900">
+                      {selectedExampleLabel || "Exemples"}
+                    </option>
                     {FORMULA_EXAMPLES.slice(1).map((ex, i) => (
                       <option key={i} value={i + 1} className="bg-slate-900 text-slate-200 truncate">{ex.label}</option>
                     ))}
@@ -208,6 +212,7 @@ export function FormulaInputBar({
                             type="button"
                             onClick={() => {
                               onSelectExample(ex);
+                              setSelectedExampleLabel(ex.label);
                               setSelectedExampleIndex(0);
                               setExampleMenuOpen(false);
                             }}

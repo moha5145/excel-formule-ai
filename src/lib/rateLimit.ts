@@ -97,3 +97,25 @@ export function dailyFreeLimit(
   entry.count += 1;
   return { allowed: true, remaining: maxPerDay - entry.count };
 }
+
+/**
+ * Read the daily free remaining quota without incrementing the counter.
+ * Used on page load to display the correct remaining count.
+ */
+export function getDailyFreeRemaining(
+  ip: string,
+  maxPerDay: number = 5
+): { remaining: number } {
+  const today = new Date().toISOString().slice(0, 10);
+  const entry = dailyTracker.get(ip);
+
+  if (!entry || entry.date !== today) {
+    return { remaining: maxPerDay };
+  }
+
+  if (entry.count >= maxPerDay) {
+    return { remaining: 0 };
+  }
+
+  return { remaining: maxPerDay - entry.count };
+}
