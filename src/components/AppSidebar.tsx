@@ -167,22 +167,43 @@ export function AppSidebar({
         </div>
 
         {/* ── Section : Support ───────────────────── */}
-        <div className="mt-auto pt-3 border-t border-slate-800/60 flex flex-col gap-1">
-          <a
-            href={process.env.NEXT_PUBLIC_SUPPORT_URL || "https://buymeacoffee.com/"}
-            target="_blank"
-            rel="noreferrer"
-            title="Soutenir le projet"
-            className={`flex items-center gap-2 px-3 py-2 rounded-xl text-yellow-400 bg-yellow-950/30 border border-yellow-700/40 hover:bg-yellow-950/50 hover:border-yellow-600/60 hover:text-yellow-300 shadow-[0_0_12px_-4px_rgba(250,204,21,0.15)] transition-all text-xs cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${isCollapsed ? "justify-center" : ""}`}
-            aria-label="Faire un don de soutien Buy Me A Coffee"
-          >
-            <Coffee size={13} />
-            {!isCollapsed && "Soutenir le projet"}
-          </a>
+        <div className="mt-auto pt-4 border-t border-slate-800/60 flex flex-col gap-2">
+          {isCollapsed ? (
+            <a
+              href={process.env.NEXT_PUBLIC_SUPPORT_URL || "https://buymeacoffee.com/"}
+              target="_blank"
+              rel="noreferrer"
+              title="Soutenir le projet"
+              className="flex items-center justify-center w-10 h-10 rounded-xl text-yellow-400 bg-yellow-950/30 border border-yellow-700/40 hover:bg-yellow-950/50 hover:border-yellow-600/60 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              aria-label="Faire un don de soutien Buy Me A Coffee"
+            >
+              <Coffee size={14} className="animate-pulse" />
+            </a>
+          ) : (
+            <div className="bg-gradient-to-br from-yellow-950/20 to-slate-900 border border-yellow-800/20 p-3.5 rounded-2xl flex flex-col gap-2 shadow-[0_0_20px_-6px_rgba(250,204,21,0.1)] relative overflow-hidden group">
+              <div className="absolute -right-6 -bottom-6 w-16 h-16 bg-yellow-500/10 rounded-full blur-xl group-hover:bg-yellow-500/20 transition-all duration-300" />
+              
+              <div className="flex items-center gap-2 text-yellow-400 font-semibold text-xs tracking-tight">
+                <Coffee size={14} className="group-hover:rotate-12 transition-transform duration-300" />
+                <span>Soutenir le projet</span>
+              </div>
+              <p className="text-[10px] text-slate-400 leading-normal">
+                Excel-Compta AI est gratuit et sans serveurs. Offrez-moi un café pour soutenir le projet !
+              </p>
+              <a
+                href={process.env.NEXT_PUBLIC_SUPPORT_URL || "https://buymeacoffee.com/"}
+                target="_blank"
+                rel="noreferrer"
+                className="w-full text-center py-2 rounded-lg bg-yellow-600 hover:bg-yellow-500 text-white text-xs font-semibold shadow-sm hover:shadow-md transition-all cursor-pointer hover:scale-[1.02]"
+              >
+                ☕ Offrir un café
+              </a>
+            </div>
+          )}
           <Link
             href="/about"
             title="À propos & FAQ"
-            className={`flex items-center gap-2 px-3 py-2 rounded-xl text-slate-500 hover:text-white hover:bg-slate-800/50 border border-transparent hover:border-slate-800 transition-all text-xs cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${isCollapsed ? "justify-center" : ""}`}
+            className={`flex items-center gap-2 px-3 py-2 rounded-xl text-slate-500 hover:text-slate-300 hover:bg-slate-800/30 border border-transparent hover:border-slate-800/30 transition-all text-xs cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${isCollapsed ? "justify-center" : ""}`}
             aria-label="En savoir plus à propos de l'application et de la confidentialité"
           >
             <HelpCircle size={13} />

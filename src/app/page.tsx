@@ -32,6 +32,30 @@ export default function Home() {
   const [copied, setCopied] = useState(false);
   const [previousPrompt, setPreviousPrompt] = useState("");
   const [history, setHistory] = useLocalStorage<HistoryItem[]>("excel_compta_history", []);
+  const [actionCount, setActionCount] = useLocalStorage<number>("excel_compta_action_count", 0);
+
+  const checkCoffeeToast = useCallback((currentCount: number) => {
+    if (currentCount === 3 || currentCount === 8 || (currentCount > 8 && (currentCount - 8) % 8 === 0)) {
+      setTimeout(() => {
+        toast("☕ Soutenir le projet ?", {
+          description: "Si Excel-Compta AI vous fait gagner du temps, offrez-moi un café pour soutenir le site !",
+          action: {
+            label: "Offrir un café",
+            onClick: () => window.open(process.env.NEXT_PUBLIC_SUPPORT_URL || "https://buymeacoffee.com/", "_blank"),
+          },
+          duration: 10000,
+        });
+      }, 1000);
+    }
+  }, []);
+
+  const handleActionComplete = useCallback(() => {
+    setActionCount((prev) => {
+      const next = typeof prev === "number" ? prev + 1 : 1;
+      checkCoffeeToast(next);
+      return next;
+    });
+  }, [setActionCount, checkCoffeeToast]);
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
@@ -63,7 +87,8 @@ export default function Home() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
     toast.success("Formule copiée dans le presse-papier !");
-  }, [response]);
+    handleActionComplete();
+  }, [response, handleActionComplete]);
 
   // Download result
   const handleDownload = useCallback(() => {
@@ -76,7 +101,8 @@ export default function Home() {
     a.click();
     URL.revokeObjectURL(url);
     toast.success("Fichier de formule téléchargé !");
-  }, [response]);
+    handleActionComplete();
+  }, [response, handleActionComplete]);
 
   // Download Excel example
   const handleDownloadExcel = useCallback(async () => {
@@ -84,11 +110,12 @@ export default function Home() {
     try {
       await downloadFormulaAsExcel(response, prompt);
       toast.success("Fichier Excel téléchargé !");
+      handleActionComplete();
     } catch (err: unknown) {
       console.error(err);
       toast.error("Erreur lors de la génération du fichier Excel.");
     }
-  }, [response, prompt]);
+  }, [response, prompt, handleActionComplete]);
 
   // Enhance prompt
   const handleEnhance = useCallback(async () => {
