@@ -311,13 +311,21 @@ function rewriteFormulaForSimulation(
   // Version EN : traduire fonctions + séparateurs
   const en = translateFrenchFormulaToEnglish(rewritten);
 
-  // Version FR : garder noms FR, séparateurs ; (hors chaînes de caractères)
+  // Version FR : garder noms FR, séparateurs ;, décimaux , (hors chaînes)
   let fr = "";
   let inStringFR = false;
   for (let k = 0; k < rewritten.length; k++) {
     const c = rewritten[k];
     if (c === '"') { inStringFR = !inStringFR; fr += c; continue; }
-    if (!inStringFR && c === ",") { fr += ";"; } else { fr += c; }
+    if (!inStringFR && c === ",") { fr += ";"; continue; }
+    if (!inStringFR && c === ".") {
+      const prev = rewritten[k - 1];
+      const next = rewritten[k + 1];
+      if (prev && /\d/.test(prev) && next && /[\d%]/.test(next)) {
+        fr += ","; continue;
+      }
+    }
+    fr += c;
   }
 
   return { en, fr };
@@ -785,12 +793,12 @@ export async function downloadFormulaAsExcel(
     resLabel.alignment = { vertical: "middle" };
 
     // Formule réécrite (cellule verte active)
-    const { en: formulaEN } = rewriteFormulaForSimulation(
+    const { fr: formulaFR } = rewriteFormulaForSimulation(
       simFormulaRaw, simParams, simDataStartRow
     );
 
     const resCell = resultRowSim.getCell(3);
-    resCell.value = { formula: formulaEN.replace(/^=/, "") };
+    resCell.value = { formula: formulaFR.replace(/^=/, "") };
     resCell.font = { name: "Consolas", size: 12, bold: true, color: { argb: "FF166534" } };
     resCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF0FDF4" } };
     resCell.numFmt = "#,##0.00";
