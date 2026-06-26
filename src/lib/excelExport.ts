@@ -790,7 +790,7 @@ export async function downloadFormulaAsExcel(
     );
 
     const resCell = resultRowSim.getCell(3);
-    resCell.value = { formula: formulaEN.replace(/^=/, ""), result: 0 };
+    resCell.value = { formula: formulaEN.replace(/^=/, "") };
     resCell.font = { name: "Consolas", size: 12, bold: true, color: { argb: "FF166534" } };
     resCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF0FDF4" } };
     resCell.numFmt = "#,##0.00";
