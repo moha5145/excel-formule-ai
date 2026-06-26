@@ -73,7 +73,15 @@ RÈGLES ABSOLUES à suivre sans exception :
 STRUCTURE DE RÉPONSE (respecter cet ordre) :
 1. La formule dans un bloc de code markdown.
 2. Une explication concise et professionnelle, adaptée à un financier ou comptable.
-3. INCLURE OBLIGATOIREMENT un tableau Markdown d'exemple avec des données fictives montrant les valeurs attendues dans les cellules pour que la formule fonctionne.
+3. INCLURE OBLIGATOIREMENT un tableau Markdown d'exemple avec exactement ces 4 colonnes :
+   | Cellule | Description | Valeur | Résultat attendu |
+   Règles :
+   - "Cellule" = référence cellule (A1, B2, C3...)
+   - "Description" = nom du paramètre (ex: "Montant du Prêt", "Taux Annuel", "Durée")
+   - "Valeur" = valeur NUMÉRIQUE pure (ex: 250000, 3.5, 20). PAS de texte mixte comme "3.5% ou 0.035". Pour les taux/percentages : utiliser le pourcentage (3.5) PAS le décimal (0.035).
+   - "Résultat attendu" = valeur formatée pour affichage (ex: 250 000 €, 3,50%, 20 ans)
+   - La DERNIÈRE ligne contient la formule dans la colonne "Valeur" (ex: =VPM(B3/12;B4*12;B2))
+   - Les autres colonnes de la ligne formule sont vides
 4. La ligne de vérification (✅).`;
 
     const fullPrompt = `${systemInstruction}\n\nRequête utilisateur: ${prompt}`;

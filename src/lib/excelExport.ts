@@ -108,7 +108,7 @@ const FRENCH_TO_ENGLISH_FUNCTIONS: Record<string, string> = {
 
 // Nettoie la syntaxe Markdown pour l'affichage brut en cellule Excel
 function cleanMarkdownFormatting(text: string): string {
-  let cleaned = text
+  const cleaned = text
     .replace(/^\s*#{1,6}\s+/, "") // Titres #, ##, ###
     .replace(/^\s*---+\s*$/, "") // Séparateurs horizontaux ---
     .replace(/^\s*\*\*\*+\s*$/, "") // Séparateurs ***
@@ -178,6 +178,151 @@ export function translateFrenchFormulaToEnglish(formula: string): string {
   return finalFormula;
 }
 
+// Détecte le type d'un paramètre depuis son nom
+function detectParamType(name: string): SimParam['type'] {
+  const lower = name.toLowerCase();
+  if (/%|taux|tx|inter[êe]t|interest|rendement/i.test(lower)) return 'percentage';
+  if (/montant|€|euro|salaire|prime|pret|emprunt|loyer|chiffre|ca\b/i.test(lower)) return 'currency';
+  if (/dur[ée]e|ann[ée]e(s)?|mois|jour(s)?|nb|nombre|p[ée]riode|term|fois/i.test(lower)) return 'integer';
+  return 'number';
+}
+
+// Extrait les paramètres de simulation depuis un tableau Markdown
+function extractSimulationParams(
+  table: ExtractedTable
+): { params: SimParam[]; formulaRaw: string } {
+  const params: SimParam[] = [];
+  let formulaRaw = "";
+
+  for (const row of table.rows) {
+    const cellRef = row[0]?.trim() || "";
+    const description = row[1]?.trim() || "";
+    const valueStr = row[2]?.trim() || "";
+    const resultStr = row[3]?.trim() || "";
+
+    // Si la colonne "Valeur" contient une formule → c'est la ligne de sortie
+    if (valueStr.startsWith("=")) {
+      formulaRaw = valueStr;
+      continue;
+    }
+
+    // Nettoyer la valeur : retirer espaces, %, symboles monétaires
+    const hasPercent = /%/.test(valueStr) || /%/.test(resultStr);
+    const cleaned = valueStr
+      .replace(/\s/g, "")
+      .replace(/%/g, "")
+      .replace(/€|euro/gi, "")
+      .replace(",", ".");
+    const numVal = Number(cleaned);
+    if (isNaN(numVal) || valueStr === "") continue;
+
+    const paramType = detectParamType(description);
+
+    // Extraire l'unité depuis le résultat attendu OU la description
+    // Ordre important : durée AVANT prêt car "Durée du Prêt" contient les deux
+    let unit = "";
+    if (/%|pourcent|taux/i.test(description)) unit = "%";
+    else if (/dur[ée]e|ann[ée]e|ans|annuel/i.test(description)) unit = "ans";
+    else if (/€|euro|montant|salaire|prime|loyer/i.test(description)) unit = "€";
+    else if (/pr[êe]t|emprunt|chiffre/i.test(description)) unit = "€";
+    else if (/mois/i.test(description)) unit = "mois";
+    else if (/jour/i.test(description)) unit = "jours";
+
+    // Pour les pourcentages : stocker la valeur pour affichage
+    // Si l'IA génère 0.035 → afficher 3.5 (multiplier par 100)
+    // Si l'IA génère 3.5 → afficher 3.5 (tel quel)
+    let displayValue = numVal;
+    let needsDivideBy100 = false;
+
+    if (paramType === "percentage" || hasPercent) {
+      // Stocker la valeur entière pour l'affichage (3.5 pour 3.5%, 20 pour 20%)
+      // Le numFmt 0.0"%" affiche "3,5%" sans traiter la cellule comme un pourcentage
+      // needsDivideBy100 = true TOUJOURS pour les pourcentages
+      // La détection intelligente dans rewriteFormulaForSimulation décidera si
+      // ajouter /100 ou non selon le contexte de la formule originale
+      if (numVal > 0 && numVal < 1) {
+        // L'IA a mis 0.035 → multiplier pour affichage
+        displayValue = numVal * 100;
+      } else {
+        // L'IA a mis 3.5 → garder tel quel
+        displayValue = numVal;
+      }
+      needsDivideBy100 = true;
+      unit = "%";
+    }
+
+    params.push({
+      name: description,
+      value: displayValue,
+      type: (paramType === "percentage" || hasPercent) ? "percentage" : paramType,
+      unit,
+      cellRef,
+      needsDivideBy100,
+    });
+  }
+
+  return { params, formulaRaw };
+}
+
+// Réécrit une formule pour la simulation : références → cellules Zone 2, taux/100, traduction
+function rewriteFormulaForSimulation(
+  formula: string,
+  params: SimParam[],
+  dataStartRow: number
+): { en: string; fr: string } {
+  const valueCol = "C";
+
+  // Map : cellRef origine → cellule Zone 2
+  const cellMap: Record<string, string> = {};
+  for (let i = 0; i < params.length; i++) {
+    cellMap[params[i].cellRef] = `${valueCol}${dataStartRow + i}`;
+  }
+
+  // Réécrire les références
+  let rewritten = formula;
+  for (const [origRef, targetRef] of Object.entries(cellMap)) {
+    const escaped = origRef.replace(/\$/g, "\\$");
+    const regex = new RegExp(`\\b${escaped}(?!\\w)`, "g");
+    rewritten = rewritten.replace(regex, targetRef);
+  }
+
+  // Insérer /100 pour les taux — détection intelligente
+  // Vérifie la formule ORIGINALE pour décider si /100 est nécessaire
+  for (let i = 0; i < params.length; i++) {
+    if (params[i].needsDivideBy100) {
+      const origRef = params[i].cellRef;
+      const targetCell = `${valueCol}${dataStartRow + i}`;
+      const escapedOrig = origRef.replace(/\$/g, "\\$");
+
+      // 1) La formule originale a-t-elle déjà /{cellRef}/100 ?
+      const hasDivideBy100 = new RegExp(`${escapedOrig}/100`).test(formula);
+
+      // 2) La cellule est-elle dans un contexte de comparaison (>=, <=, =, <, >) ?
+      const hasComparison = new RegExp(`${escapedOrig}\\s*[<>=]`).test(formula);
+
+      if (!hasDivideBy100 && !hasComparison) {
+        // Ajouter /100 — ni déjà présent, ni en contexte de comparaison
+        const rateRegex = new RegExp(`(${targetCell})(?!\\w|/100)`, "g");
+        rewritten = rewritten.replace(rateRegex, "$1/100");
+      }
+    }
+  }
+
+  // Version EN : traduire fonctions + séparateurs
+  const en = translateFrenchFormulaToEnglish(rewritten);
+
+  // Version FR : garder noms FR, séparateurs ; (hors chaînes de caractères)
+  let fr = "";
+  let inStringFR = false;
+  for (let k = 0; k < rewritten.length; k++) {
+    const c = rewritten[k];
+    if (c === '"') { inStringFR = !inStringFR; fr += c; continue; }
+    if (!inStringFR && c === ",") { fr += ";"; } else { fr += c; }
+  }
+
+  return { en, fr };
+}
+
 // Extrait la formule depuis le code Markdown
 export function extractFormula(markdown: string): string {
   // Recherche d'un bloc de code avec une formule
@@ -205,6 +350,15 @@ export function extractFormula(markdown: string): string {
 interface ExtractedTable {
   headers: string[];
   rows: string[][];
+}
+
+interface SimParam {
+  name: string;
+  value: number;
+  type: 'percentage' | 'currency' | 'integer' | 'number';
+  unit: string;
+  cellRef: string;
+  needsDivideBy100: boolean;
 }
 
 // Extrait les tableaux Markdown pour en faire des données structurées
@@ -457,6 +611,29 @@ export async function downloadFormulaAsExcel(
 
   let nextRow = 4;
 
+  // ── Calcul du dataStartRow AVANT tout affichage (pour Zone 1 et Zone 2)
+  // Layout: row4=title, row5=FR(+1), row6=EN(+1), row7=instructions(+2), row9=simtitle(+1), row10=headers(+1) → dataStartRow=11
+  const hasEN = formulaEnglish && formulaEnglish !== formulaRaw;
+  const simDataStartRow = 4 + 1 + 1 + (hasEN ? 1 : 0) + 2 + 1 + 1; // = 12 ou 11
+
+  // ── Pré-extraction des paramètres de simulation (pour Zone 1 et Zone 2)
+  let simParams: SimParam[] = [];
+  let simFormulaRaw = formulaRaw;
+  let zone1FormulaFR = "";
+  let zone1FormulaEN = "";
+
+  if (tables.length > 0) {
+    const { params, formulaRaw: extracted } = extractSimulationParams(tables[0]);
+    simParams = params;
+    simFormulaRaw = extracted || formulaRaw;
+
+    if (simParams.length > 0 && simFormulaRaw) {
+      const rewritten = rewriteFormulaForSimulation(simFormulaRaw, simParams, simDataStartRow);
+      zone1FormulaFR = rewritten.fr;
+      zone1FormulaEN = rewritten.en;
+    }
+  }
+
   // ── Section formules à copier-coller (point principal de valeur)
   const writeSection = (row: number, label: string, value: string, color: string, bgColor: string) => {
     const labelCell = sheet2.getCell(`B${row}`);
@@ -486,13 +663,17 @@ export async function downloadFormulaAsExcel(
   sheet2.getRow(nextRow).height = 22;
   nextRow++;
 
-  if (formulaRaw) {
-    writeSection(nextRow, "Version FR :", formulaRaw, AMBER, LIGHT_BG);
+  // Utiliser les formules réécrites (Zone 2) si disponibles, sinon les originales
+  const displayFormulaFR = zone1FormulaFR || formulaRaw;
+  const displayFormulaEN = zone1FormulaEN || formulaEnglish;
+
+  if (displayFormulaFR) {
+    writeSection(nextRow, "Version FR :", displayFormulaFR, AMBER, LIGHT_BG);
     nextRow++;
   }
 
-  if (formulaEnglish && formulaEnglish !== formulaRaw) {
-    writeSection(nextRow, "Version EN :", formulaEnglish, "FF16803C", "FFF0FDF4");
+  if (displayFormulaEN && displayFormulaEN !== displayFormulaFR) {
+    writeSection(nextRow, "Version EN :", displayFormulaEN, "FF16803C", "FFF0FDF4");
     nextRow++;
   }
 
@@ -504,88 +685,157 @@ export async function downloadFormulaAsExcel(
   sheet2.getRow(nextRow).height = 18;
   nextRow += 2;
 
-  // ── Tableaux d'exemples (si détectés dans la réponse IA)
-  if (tables.length > 0) {
+  // ── SIMULATION INTERACTIVE (Zone 2)
+  if (simParams.length > 0 && simFormulaRaw) {
+    // ── Titre section simulation
     sheet2.mergeCells(`B${nextRow}:H${nextRow}`);
-    const tableTitle = sheet2.getCell(`B${nextRow}`);
-    tableTitle.value = "📊  Données d'exemple (extraites de la réponse IA)";
-    tableTitle.font = { name: "Segoe UI", size: 11, bold: true, color: { argb: SLATE_900 } };
+    const simTitle = sheet2.getCell(`B${nextRow}`);
+    simTitle.value = "🧪  Simulez votre formule — Modifiez les valeurs en jaune";
+    simTitle.font = { name: "Segoe UI", size: 11, bold: true, color: { argb: SLATE_900 } };
     sheet2.getRow(nextRow).height = 22;
     nextRow++;
 
-    for (let t = 0; t < tables.length; t++) {
-      const table = tables[t];
-
-      if (tables.length > 1) {
-        sheet2.getCell(`B${nextRow}`).value = `Tableau n°${t + 1}`;
-        sheet2.getCell(`B${nextRow}`).font = { name: "Segoe UI", size: 10, bold: true, color: { argb: SLATE_500 } };
-        sheet2.getRow(nextRow).height = 18;
-        nextRow++;
-      }
-
-      // En-têtes
-      const headerRow = sheet2.getRow(nextRow);
-      headerRow.height = 24;
-      for (let h = 0; h < table.headers.length; h++) {
-        const cell = headerRow.getCell(h + 2);
-        cell.value = table.headers[h];
-        cell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: WHITE } };
-        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF334155" } };
-        cell.alignment = { horizontal: "center", vertical: "middle" };
-        cell.border = {
-          top: { style: "thin", color: { argb: "FF475569" } },
-          bottom: { style: "medium", color: { argb: "FF1E293B" } },
-          left: { style: "thin", color: { argb: "FF475569" } },
-          right: { style: "thin", color: { argb: "FF475569" } },
-        };
-      }
-      nextRow++;
-
-      // Données
-      for (let r = 0; r < table.rows.length; r++) {
-        const dataRow = sheet2.getRow(nextRow);
-        dataRow.height = 20;
-        const rowData = table.rows[r];
-
-        for (let c = 0; c < rowData.length; c++) {
-          const cell = dataRow.getCell(c + 2);
-          const rawVal = rowData[c];
-          const numVal = Number(rawVal.replace(/\s/g, "").replace(",", "."));
-          if (!isNaN(numVal) && rawVal.trim() !== "") {
-            cell.value = numVal;
-            cell.numFmt = "#,##0.##";
-            cell.alignment = { horizontal: "right" };
-          } else {
-            cell.value = rawVal;
-            cell.alignment = { horizontal: "left" };
-          }
-          cell.font = { name: "Segoe UI", size: 10 };
-          if (r % 2 === 1) {
-            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } };
-          }
-          cell.border = {
-            top: { style: "thin", color: { argb: "FFE2E8F0" } },
-            bottom: { style: "thin", color: { argb: "FFE2E8F0" } },
-            left: { style: "thin", color: { argb: "FFE2E8F0" } },
-            right: { style: "thin", color: { argb: "FFE2E8F0" } },
-          };
-        }
-        nextRow++;
-      }
-      nextRow += 2;
+    // ── Headers du tableau de simulation
+    const simHeaderRow = sheet2.getRow(nextRow);
+    simHeaderRow.height = 24;
+    const simHeaders = ["Paramètre", "Valeur", "Description"];
+    for (let h = 0; h < simHeaders.length; h++) {
+      const cell = simHeaderRow.getCell(h + 2);
+      cell.value = simHeaders[h];
+      cell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: WHITE } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF334155" } };
+      cell.alignment = { horizontal: "center", vertical: "middle" };
+      cell.border = {
+        top: { style: "thin", color: { argb: "FF475569" } },
+        bottom: { style: "medium", color: { argb: "FF1E293B" } },
+        left: { style: "thin", color: { argb: "FF475569" } },
+        right: { style: "thin", color: { argb: "FF475569" } },
+      };
     }
+    nextRow++;
+
+    // ── Lignes de paramètres (cellules d'entrée)
+    const GOLD_BORDER = "FFD97706";
+    const LIGHT_YELLOW = "FFFEF3C7";
+
+    for (let i = 0; i < simParams.length; i++) {
+      const p = simParams[i];
+      const row = sheet2.getRow(nextRow);
+      row.height = 22;
+
+      // Colonne B : Nom du paramètre
+      const nameCell = row.getCell(2);
+      nameCell.value = p.name;
+      nameCell.font = { name: "Segoe UI", size: 10, color: { argb: "FF475569" } };
+      nameCell.alignment = { vertical: "middle" };
+
+      // Colonne C : Valeur (cellule modifiable, fond jaune)
+      const valCell = row.getCell(3);
+      valCell.value = p.value;
+      valCell.font = { name: "Segoe UI", size: 11, bold: true, color: { argb: SLATE_900 } };
+      valCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: LIGHT_YELLOW } };
+      valCell.alignment = { horizontal: "right", vertical: "middle" };
+      valCell.border = {
+        top: { style: "thin", color: { argb: GOLD_BORDER } },
+        bottom: { style: "thin", color: { argb: GOLD_BORDER } },
+        left: { style: "thin", color: { argb: GOLD_BORDER } },
+        right: { style: "thin", color: { argb: GOLD_BORDER } },
+      };
+
+      // Format selon le type
+      if (p.type === "percentage") {
+        valCell.numFmt = '0.0"%"';
+      } else if (p.type === "currency") {
+        valCell.numFmt = "#,##0.00";
+      } else if (p.type === "integer") {
+        valCell.numFmt = "0";
+      } else {
+        valCell.numFmt = "#,##0.##";
+      }
+
+      // Colonne D : Description/Unité
+      const descCell = row.getCell(4);
+      descCell.value = p.unit || "";
+      descCell.font = { name: "Segoe UI", size: 9, italic: true, color: { argb: "FF64748B" } };
+      descCell.alignment = { vertical: "middle" };
+
+      nextRow++;
+    }
+
+    // ── Ligne séparatrice
+    const sepRow = sheet2.getRow(nextRow);
+    sepRow.height = 4;
+    for (let c = 2; c <= 4; c++) {
+      const cell = sepRow.getCell(c);
+      cell.border = {
+        bottom: { style: "thin", color: { argb: "FFE2E8F0" } },
+      };
+    }
+    nextRow++;
+
+    // ── Ligne Résultat (formule active)
+    const resultRowSim = sheet2.getRow(nextRow);
+    resultRowSim.height = 26;
+
+    // Label résultat
+    const resLabel = resultRowSim.getCell(2);
+    resLabel.value = "→ Résultat";
+    resLabel.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: "FF166534" } };
+    resLabel.alignment = { vertical: "middle" };
+
+    // Formule réécrite (cellule verte active)
+    const { fr: formulaFR } = rewriteFormulaForSimulation(
+      simFormulaRaw, simParams, simDataStartRow
+    );
+
+    const resCell = resultRowSim.getCell(3);
+    resCell.value = { formula: formulaFR };
+    resCell.font = { name: "Consolas", size: 12, bold: true, color: { argb: "FF166534" } };
+    resCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF0FDF4" } };
+    resCell.numFmt = "#,##0.00";
+    resCell.alignment = { horizontal: "right", vertical: "middle" };
+    resCell.border = {
+      top: { style: "medium", color: { argb: "FF16A34A" } },
+      bottom: { style: "medium", color: { argb: "FF16A34A" } },
+      left: { style: "medium", color: { argb: "FF16A34A" } },
+      right: { style: "medium", color: { argb: "FF16A34A" } },
+    };
+
+    // Unité résultat
+    const resUnit = resultRowSim.getCell(4);
+    const lastParam = simParams[simParams.length - 1];
+    resUnit.value = lastParam?.unit ? `/${lastParam.unit}` : "";
+    resUnit.font = { name: "Segoe UI", size: 9, italic: true, color: { argb: "FF166534" } };
+    resUnit.alignment = { vertical: "middle" };
+
+    nextRow += 2;
+
+    // ── Zone 3 : Instructions
+    sheet2.mergeCells(`B${nextRow}:H${nextRow}`);
+    const instrCellSim = sheet2.getCell(`B${nextRow}`);
+    instrCellSim.value = "💡  Modifiez les valeurs jaunes pour tester d'autres scénarios. La formule verte se recalcule automatiquement.";
+    instrCellSim.font = { name: "Segoe UI", size: 9, italic: true, color: { argb: SLATE_500 } };
+    sheet2.getRow(nextRow).height = 18;
+    nextRow++;
+
+    sheet2.mergeCells(`B${nextRow}:H${nextRow}`);
+    const instrCellSim2 = sheet2.getCell(`B${nextRow}`);
+    instrCellSim2.value = "📋  Copiez la formule ci-dessus (Zone 1) pour l'utiliser dans votre classeur.";
+    instrCellSim2.font = { name: "Segoe UI", size: 9, italic: true, color: { argb: SLATE_500 } };
+    sheet2.getRow(nextRow).height = 18;
+    nextRow += 2;
   } else {
     // Pas de tableau : juste un message clair et de l'espace vide
     sheet2.mergeCells(`B${nextRow}:H${nextRow}`);
     const noTableMsg = sheet2.getCell(`B${nextRow}`);
-    noTableMsg.value = "ℹ️  Aucun tableau de données n'a été détecté dans la réponse IA.";
+    noTableMsg.value = "ℹ️  Aucune donnée d'exemple détectée dans la réponse IA.";
     noTableMsg.font = { name: "Segoe UI", size: 10, italic: true, color: { argb: SLATE_500 } };
     sheet2.getRow(nextRow).height = 18;
     nextRow++;
 
     sheet2.mergeCells(`B${nextRow}:H${nextRow}`);
     const noTableHint = sheet2.getCell(`B${nextRow}`);
-    noTableHint.value = "   Vous pouvez créer votre propre tableau ici et utiliser la formule ci-dessus.";
+    noTableHint.value = "   Utilisez la formule ci-dessus (Zone 1) dans votre propre classeur.";
     noTableHint.font = { name: "Segoe UI", size: 9, color: { argb: SLATE_500 } };
     sheet2.getRow(nextRow).height = 18;
     nextRow += 2;
