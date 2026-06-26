@@ -785,12 +785,12 @@ export async function downloadFormulaAsExcel(
     resLabel.alignment = { vertical: "middle" };
 
     // Formule réécrite (cellule verte active)
-    const { fr: formulaFR } = rewriteFormulaForSimulation(
+    const { en: formulaEN } = rewriteFormulaForSimulation(
       simFormulaRaw, simParams, simDataStartRow
     );
 
     const resCell = resultRowSim.getCell(3);
-    resCell.value = { formula: formulaFR.replace(/^=/, ""), result: 0 };
+    resCell.value = { formula: formulaEN.replace(/^=/, ""), result: 0 };
     resCell.font = { name: "Consolas", size: 12, bold: true, color: { argb: "FF166534" } };
     resCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF0FDF4" } };
     resCell.numFmt = "#,##0.00";
