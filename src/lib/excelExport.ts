@@ -314,6 +314,10 @@ function rewriteFormulaForSimulation(
     }
   }
 
+  // Correction : ajouter * manquant entre référence cellule et nombre décimal
+  // Ex: B10.05 → B10*0.05 (l'IA omet parfois l'opérateur de multiplication)
+  rewritten = rewritten.replace(/([A-Z]\d+)\.(\d+)/g, "$1*0.$2");
+
   // Version EN : traduire fonctions + séparateurs
   const en = translateFrenchFormulaToEnglish(rewritten);
 
