@@ -46,7 +46,7 @@ const FRENCH_TO_ENGLISH_FUNCTIONS: Record<string, string> = {
   // Recherche & Tableaux
   "RECHERCHEV": "VLOOKUP",
   "RECHERCHEH": "HLOOKUP",
-  "RECHERCHEX": "XLOOKUP",
+  // RECHERCHEX retiré car XLOOKUP non reconnu par LibreOffice
   "EQUIVX": "XMATCH",
   "EQUIV": "MATCH",
   "INDEX": "INDEX",
