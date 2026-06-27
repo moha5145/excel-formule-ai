@@ -1,7 +1,8 @@
 "use client";
 import { useRef, useEffect, useState, useCallback, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { Loader2, Copy, Check, Sparkles, Wand2, Undo2, Zap, Brain, Key, Download, FileSpreadsheet } from "lucide-react";
+import { Loader2, Copy, Check, Sparkles, Wand2, Undo2, Zap, Brain, Key, Download, FileSpreadsheet, FileType } from "lucide-react";
+import type { ExportFormat } from "@/lib/excelExport";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -64,6 +65,8 @@ interface FormulaInputBarProps {
   onUndoEnhance: () => void;
   apiKey: string;
   onSelectExample?: (example: { label: string; keywords: string }) => void;
+  format: ExportFormat;
+  onFormatChange: (format: ExportFormat) => void;
 }
 
 export function FormulaInputBar({
@@ -81,6 +84,8 @@ export function FormulaInputBar({
   onUndoEnhance,
   apiKey,
   onSelectExample,
+  format,
+  onFormatChange,
 }: FormulaInputBarProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [selectedExampleIndex, setSelectedExampleIndex] = useState(0);
@@ -114,7 +119,7 @@ export function FormulaInputBar({
           />
 
           <div className="flex flex-wrap items-center justify-between mt-2 pt-2 border-t border-slate-800/60 px-1 gap-2">
-            {/* Left actions: Model choice, Enhance */}
+            {/* Left actions: Model choice, Format, Enhance */}
             <div className="flex items-center gap-2">
               {apiKey && onModelChange && (
                 <div className="flex items-center gap-1 bg-slate-950/80 border border-slate-800 p-0.5 rounded-lg text-xs">
@@ -136,6 +141,20 @@ export function FormulaInputBar({
                   </button>
                 </div>
               )}
+              <div className="flex items-center gap-1 bg-slate-950/80 border border-slate-800 p-0.5 rounded-lg text-xs">
+                <FileType size={11} className="text-slate-500 ml-1.5 flex-shrink-0" />
+                <select
+                  value={format}
+                  onChange={(e) => onFormatChange(e.target.value as ExportFormat)}
+                  className="bg-transparent text-slate-400 hover:text-white text-[11px] py-1 px-1.5 rounded-md border-0 focus:outline-none focus:ring-1 focus:ring-primary/50 cursor-pointer appearance-none"
+                  aria-label="Format de sortie"
+                >
+                  <option value="excel-en" className="bg-slate-900">Excel EN</option>
+                  <option value="excel-fr" className="bg-slate-900">Excel FR</option>
+                  <option value="libreoffice-en" className="bg-slate-900">LibreOffice EN</option>
+                  <option value="libreoffice-fr" className="bg-slate-900">LibreOffice FR</option>
+                </select>
+              </div>
               <Button
                 variant="ghost"
                 size="sm"

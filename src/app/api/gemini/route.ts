@@ -7,6 +7,7 @@ const GeminiRequestSchema = z.object({
   prompt: z.string().min(1, "Le prompt ne peut pas être vide").max(3000, "Le prompt est trop long (max 3000 caractères)"),
   apiKey: z.string().nullable().optional(),
   modelChoice: z.enum(["flash", "pro"]).optional(),
+  format: z.enum(["excel-en", "excel-fr", "libreoffice-en", "libreoffice-fr"]).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -19,7 +20,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
     }
     
-    const { prompt, apiKey, modelChoice } = parsed.data;
+    const { prompt, apiKey, modelChoice, format: reqFormat } = parsed.data;
     const finalApiKey = apiKey || process.env.GEMINI_API_KEY;
     
     if (!finalApiKey) {
@@ -61,7 +62,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const FORMAT_INSTRUCTIONS: Record<string, string> = {
+      "excel-en": "FORMAT DE FORMULE : Microsoft Excel (anglais)\n- Noms de fonctions : anglais (IF, VLOOKUP, PMT, XLOOKUP)\n- Séparateur d'arguments : , (virgule)\n- Séparateur décimal : . (point)",
+      "excel-fr": "FORMAT DE FORMULE : Microsoft Excel (français)\n- Noms de fonctions : français (SI, RECHERCHEV, VPM, RECHERCHEX)\n- Séparateur d'arguments : ; (point-virgule)\n- Séparateur décimal : , (virgule)",
+      "libreoffice-en": "FORMAT DE FORMULE : LibreOffice Calc (anglais)\n- Noms de fonctions : anglais (IF, VLOOKUP, PMT)\n- Séparateur d'arguments : , (virgule)\n- Séparateur décimal : . (point)\n- N'utilise PAS XLOOKUP ni XMATCH (non reconnus par LibreOffice) : utilise INDEX+MATCH à la place",
+      "libreoffice-fr": "FORMAT DE FORMULE : LibreOffice Calc (français)\n- Noms de fonctions : français (SI, RECHERCHEV, VPM)\n- Séparateur d'arguments : ; (point-virgule)\n- Séparateur décimal : , (virgule)\n- N'utilise PAS RECHERCHEX ni EQUIVX (non reconnus par LibreOffice) : utilise INDEX+EQUIV à la place",
+    };
+
+    const formatKey = reqFormat || "libreoffice-fr";
+    const formatInstruction = FORMAT_INSTRUCTIONS[formatKey] || FORMAT_INSTRUCTIONS["libreoffice-fr"];
+
     const systemInstruction = `Tu es un expert certifié en Microsoft Excel, Google Sheets, comptabilité et audit financier.
+
+${formatInstruction}
 
 RÈGLES ABSOLUES à suivre sans exception :
 1. N'invente JAMAIS une fonction Excel/Sheets qui n'existe pas. Si tu as un doute, dis-le explicitement.

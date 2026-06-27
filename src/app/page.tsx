@@ -11,6 +11,7 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { Menu } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { downloadFormulaAsExcel } from "@/lib/excelExport";
+import type { ExportFormat } from "@/lib/excelExport";
 
 interface HistoryItem {
   prompt: string;
@@ -20,6 +21,7 @@ interface HistoryItem {
 export default function Home() {
   const [apiKey, setApiKey] = useLocalStorage<string | null>("gemini_api_key", null);
   const [modelChoice, setModelChoice] = useLocalStorage<"flash" | "pro">("excel_compta_model", "flash");
+  const [exportFormat, setExportFormat] = useLocalStorage<ExportFormat>("excel_export_format", "libreoffice-fr");
   const [dailyFreeRemaining, setDailyFreeRemaining] = useState<number | null>(5);
   const [isKeyModalOpen, setIsKeyModalOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -108,7 +110,7 @@ export default function Home() {
   const handleDownloadExcel = useCallback(async () => {
     if (!response) return;
     try {
-      await downloadFormulaAsExcel(response, prompt);
+      await downloadFormulaAsExcel(response, prompt, exportFormat);
       toast.success("Fichier Excel téléchargé !");
       handleActionComplete();
     } catch (err: unknown) {
@@ -169,7 +171,7 @@ export default function Home() {
       const res = await fetch("/api/gemini", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, modelChoice, ...(apiKey ? { apiKey } : {}) }),
+        body: JSON.stringify({ prompt, modelChoice, format: exportFormat, ...(apiKey ? { apiKey } : {}) }),
       });
 
       const freeRemainingHeader = res.headers.get("X-Free-Remaining");
@@ -369,6 +371,8 @@ export default function Home() {
             setPrompt(example.label);
             setResponse("");
           }}
+          format={exportFormat}
+          onFormatChange={setExportFormat}
         />
       </main>
     </div>

@@ -1,110 +1,7 @@
 import ExcelJS from "exceljs";
-
-// Dictionnaire complet de traduction Français -> Anglais des fonctions Excel courantes
-const FRENCH_TO_ENGLISH_FUNCTIONS: Record<string, string> = {
-  // Logique
-  "SI.CONDITIONS": "IFS",
-  "SI.NON.DISP": "IFNA",
-  "SIERREUR": "IFERROR",
-  "SI": "IF",
-  "ESTERREUR": "ISERROR",
-  "ESTERR": "ISERR",
-  "ESTNA": "ISNA",
-  "ESTVIDE": "ISBLANK",
-  "ESTNUM": "ISNUMBER",
-  "ESTTEXTE": "ISTEXT",
-  "ET": "AND",
-  "OU": "OR",
-  "NON": "NOT",
-
-  // Math & Statistiques
-  "SOMME.SI.ENS": "SUMIFS",
-  "SOMME.SI": "SUMIF",
-  "SOMME": "SUM",
-  "NB.SI.ENS": "COUNTIFS",
-  "NB.SI": "COUNTIF",
-  "NB.VIDE": "COUNTBLANK",
-  "NBVAL": "COUNTA",
-  "NB": "COUNT",
-  "MOYENNE.SI.ENS": "AVERAGEIFS",
-  "MOYENNE.SI": "AVERAGEIF",
-  "MOYENNE": "AVERAGE",
-  "GRANDE.VALEUR": "LARGE",
-  "PETITE.VALEUR": "SMALL",
-  "ARRONDI.SUP": "ROUNDUP",
-  "ARRONDI.INF": "ROUNDDOWN",
-  "ARRONDI": "ROUND",
-  "SOMMEPROD": "SUMPRODUCT",
-  "PRODUIT": "PRODUCT",
-  "MAX": "MAX",
-  "MIN": "MIN",
-  "RANG": "RANK",
-  "ENT": "INT",
-  "ABS": "ABS",
-  "MOD": "MOD",
-
-  // Recherche & Tableaux
-  "RECHERCHEV": "VLOOKUP",
-  "RECHERCHEH": "HLOOKUP",
-  // RECHERCHEX retiré car XLOOKUP non reconnu par LibreOffice
-  "EQUIVX": "XMATCH",
-  "EQUIV": "MATCH",
-  "INDEX": "INDEX",
-  "CHOISIR": "CHOOSE",
-  "DECALER": "OFFSET",
-  "INDIRECT": "INDIRECT",
-  "COLONNE": "COLUMN",
-  "LIGNE": "ROW",
-  "TRANSPOSE": "TRANSPOSE",
-  "TRIERPAR": "SORTBY",
-  "TRIER": "SORT",
-  "UNIQUE": "UNIQUE",
-  "FILTRE": "FILTER",
-
-  // Finance
-  "VPM": "PMT",
-  "AMORLIN": "SLN",
-  "AMORDEG": "DB",
-  "DDB": "DDB",
-  "VAN": "NPV",
-  "TRI": "IRR",
-  "TAUX": "RATE",
-  "NPM": "NPER",
-  "VC": "FV",
-  "VA": "PV",
-
-  // Texte
-  "CONCATENER": "CONCATENATE",
-  "CONCAT": "CONCAT",
-  "TEXTE": "TEXT",
-  "GAUCHE": "LEFT",
-  "DROITE": "RIGHT",
-  "STXT": "MID",
-  "NBCAR": "LEN",
-  "TROUVER": "FIND",
-  "CHERCHER": "SEARCH",
-  "SUBSTITUER": "SUBSTITUTE",
-  "REMPLACER": "REPLACE",
-  "EPURAGE": "CLEAN",
-  "SUPPRESPACE": "TRIM",
-  "MINUSCULE": "LOWER",
-  "MAJUSCULE": "UPPER",
-  "NOMPROPRE": "PROPER",
-
-  // Date & Heure
-  "AUJOURDHUI": "TODAY",
-  "MAINTENANT": "NOW",
-  "FIN.MOIS": "EOMONTH",
-  "NB.JOURS.OUVRES": "NETWORKDAYS",
-  "NO.SEMAINE": "WEEKNUM",
-  "JOURSEM": "WEEKDAY",
-  "DATEDIF": "DATEDIF",
-  "ANNEE": "YEAR",
-  "MOIS": "MONTH",
-  "JOUR": "DAY",
-  "DATE": "DATE",
-  "JOURS": "DAYS",
-};
+import JSZip from "jszip";
+import { type ExportFormat, postProcessFormula, convertToUsInvariant } from "./excelExport/postProcessFormula";
+export type { ExportFormat };
 
 // Nettoie la syntaxe Markdown pour l'affichage brut en cellule Excel
 function cleanMarkdownFormatting(text: string): string {
@@ -122,67 +19,7 @@ function cleanMarkdownFormatting(text: string): string {
   return cleaned;
 }
 
-// Traduit les formules Excel du Français vers l'Anglais pour affichage (texte uniquement)
-export function translateFrenchFormulaToEnglish(formula: string): string {
-  let translated = formula.trim();
 
-  // 1. Remplacer les noms de fonctions (les clés les plus longues d'abord pour éviter les conflits)
-  const keys = Object.keys(FRENCH_TO_ENGLISH_FUNCTIONS).sort((a, b) => b.length - a.length);
-
-  for (const key of keys) {
-    // Échapper les points dans la clé pour la regex
-    const escapedKey = key.replace(/\./g, "\\.");
-    // Matcher le nom de fonction uniquement suivi d'une parenthèse ouvrante
-    const regex = new RegExp(`\\b${escapedKey}(?=\\s*\\()`, "gi");
-    translated = translated.replace(regex, FRENCH_TO_ENGLISH_FUNCTIONS[key]);
-  }
-
-  // 1b. Remplacer les constantes booléennes VRAI → TRUE, FAUX → FALSE
-  const FRENCH_TO_ENGLISH_CONSTANTS = { VRAI: "TRUE", FAUX: "FALSE" };
-  for (const [frConst, enConst] of Object.entries(FRENCH_TO_ENGLISH_CONSTANTS)) {
-    translated = translated.replace(new RegExp(`\\b${frConst}\\b`, "gi"), enConst);
-  }
-
-  // 2. Remplacer les séparateurs d'arguments : ";" → ","
-  // et les séparateurs décimaux : "," → "." uniquement hors chaînes de caractères
-  let inString = false;
-  let finalFormula = "";
-  let i = 0;
-  while (i < translated.length) {
-    const char = translated[i];
-
-    if (char === '"') {
-      inString = !inString;
-      finalFormula += char;
-      i++;
-      continue;
-    }
-
-    if (!inString) {
-      if (char === ";") {
-        finalFormula += ",";
-      } else if (char === ",") {
-        // Vérifier si c'est un séparateur décimal (chiffre avant ET chiffre/% après)
-        const prev = translated[i - 1];
-        const next = translated[i + 1];
-        const isDecimalSeparator = prev && /\d/.test(prev) && next && /[\d%]/.test(next);
-        if (isDecimalSeparator) {
-          finalFormula += ".";
-        } else {
-          // C'est une virgule ordinaire (déjà un séparateur en anglais), conserver
-          finalFormula += ",";
-        }
-      } else {
-        finalFormula += char;
-      }
-    } else {
-      finalFormula += char;
-    }
-    i++;
-  }
-
-  return finalFormula;
-}
 
 // Détecte le type d'un paramètre depuis son nom
 function detectParamType(name: string): SimParam['type'] {
@@ -270,12 +107,12 @@ function extractSimulationParams(
   return { params, formulaRaw };
 }
 
-// Réécrit une formule pour la simulation : références → cellules Zone 2, taux/100, traduction
+// Réécrit une formule pour la simulation : références → cellules Zone 2, taux/100
 function rewriteFormulaForSimulation(
   formula: string,
   params: SimParam[],
   dataStartRow: number
-): { en: string; fr: string } {
+): string {
   const valueCol = "C";
 
   // Map : cellRef origine → cellule Zone 2
@@ -314,31 +151,10 @@ function rewriteFormulaForSimulation(
     }
   }
 
-  // Correction : ajouter * manquant entre référence cellule et nombre décimal
-  // Ex: B10.05 → B10*0.05 (l'IA omet parfois l'opérateur de multiplication)
+  // Ajouter * manquant entre référence cellule et nombre décimal (safety net)
   rewritten = rewritten.replace(/([A-Z]\d+)\.(\d+)/g, "$1*0.$2");
 
-  // Version EN : traduire fonctions + séparateurs
-  const en = translateFrenchFormulaToEnglish(rewritten);
-
-  // Version FR : garder noms FR, séparateurs ;, décimaux , (hors chaînes)
-  let fr = "";
-  let inStringFR = false;
-  for (let k = 0; k < rewritten.length; k++) {
-    const c = rewritten[k];
-    if (c === '"') { inStringFR = !inStringFR; fr += c; continue; }
-    if (!inStringFR && c === ",") { fr += ";"; continue; }
-    if (!inStringFR && c === ".") {
-      const prev = rewritten[k - 1];
-      const next = rewritten[k + 1];
-      if (prev && /\d/.test(prev) && next && /[\d%]/.test(next)) {
-        fr += ","; continue;
-      }
-    }
-    fr += c;
-  }
-
-  return { en, fr };
+  return rewritten;
 }
 
 // Extrait la formule depuis le code Markdown
@@ -464,7 +280,8 @@ function parseExplanationLines(markdown: string): LineType[] {
 
 export async function downloadFormulaAsExcel(
   response: string,
-  prompt: string
+  prompt: string,
+  format: ExportFormat = "libreoffice-fr"
 ): Promise<void> {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "Excel-Compta AI";
@@ -475,8 +292,6 @@ export async function downloadFormulaAsExcel(
   const formulaRaw = extractFormula(response);
   const tables = extractTables(response);
   const explanationLines = parseExplanationLines(response);
-  // Version anglaise pour affichage (texte uniquement, pas de formule active)
-  const formulaEnglish = formulaRaw ? translateFrenchFormulaToEnglish(formulaRaw) : "";
 
   // ─────────────────────────────────────────────────────────────
   // CRÉATION DES ONGLETS (l'ordre détermine l'ordre d'affichage)
@@ -527,8 +342,8 @@ export async function downloadFormulaAsExcel(
   demCell.alignment = { wrapText: true, vertical: "top" };
   sheet1.getRow(4).height = 24;
 
-  // ── Formule version française (telle que générée)
-  setLabel("A6", "Formule\n(version FR) :");
+  // ── Formule générée
+  setLabel("A6", "Formule :");
   sheet1.getCell("A6").alignment = { wrapText: true, vertical: "top" };
   sheet1.mergeCells("B6:H6");
   const frCell = sheet1.getCell("B6");
@@ -544,35 +359,8 @@ export async function downloadFormulaAsExcel(
   };
   sheet1.getRow(6).height = 30;
 
-  // ── Formule version anglaise (à copier pour Excel anglais / Google Sheets)
-  if (formulaEnglish && formulaEnglish !== formulaRaw) {
-    setLabel("A7", "Formule\n(version EN) :");
-    sheet1.getCell("A7").alignment = { wrapText: true, vertical: "top" };
-    sheet1.mergeCells("B7:H7");
-    const enCell = sheet1.getCell("B7");
-    enCell.value = formulaEnglish;
-    enCell.font = { name: "Consolas", size: 11, bold: true, color: { argb: "FF16803C" } }; // Vert
-    enCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF0FDF4" } }; // Green 50
-    enCell.alignment = { wrapText: true, vertical: "middle" };
-    enCell.border = {
-      top: { style: "thin", color: { argb: "FFD1FAE5" } },
-      bottom: { style: "thin", color: { argb: "FFD1FAE5" } },
-      left: { style: "thin", color: { argb: "FFD1FAE5" } },
-      right: { style: "thin", color: { argb: "FFD1FAE5" } },
-    };
-    sheet1.getRow(7).height = 30;
-
-    // Note sous la formule anglaise
-    sheet1.mergeCells("B8:H8");
-    const noteCell = sheet1.getCell("B8");
-    noteCell.value = "ℹ️  Version anglaise : à utiliser si votre Excel est en anglais ou pour Google Sheets. Collez-la dans une cellule vide.";
-    noteCell.font = { name: "Segoe UI", size: 9, italic: true, color: { argb: SLATE_500 } };
-    noteCell.alignment = { wrapText: true };
-    sheet1.getRow(8).height = 18;
-  }
-
   // ── Séparateur avant les explications
-  const sepRow = formulaEnglish && formulaEnglish !== formulaRaw ? 10 : 9;
+  const sepRow = 9;
   setLabel(`A${sepRow}`, "Explication :");
 
   let currentLineIdx = sepRow;
@@ -630,16 +418,14 @@ export async function downloadFormulaAsExcel(
 
   let nextRow = 4;
 
-  // ── Calcul du dataStartRow AVANT tout affichage (pour Zone 1 et Zone 2)
-  // Layout: row4=title, row5=FR(+1), row6=EN(+1), row7=instructions(+2), row9=simtitle(+1), row10=headers(+1) → dataStartRow=11
-  const hasEN = formulaEnglish && formulaEnglish !== formulaRaw;
-  const simDataStartRow = 4 + 1 + 1 + (hasEN ? 1 : 0) + 2 + 1 + 1; // = 12 ou 11
+  // ── Calcul du dataStartRow AVANT tout affichage
+  // Layout: row4=title, row5=formula, row6=instructions(+2), row8=simtitle(+1), row9=headers(+1) → dataStartRow=10
+  const simDataStartRow = 4 + 1 + 1 + 2 + 1 + 1; // = 10
 
-  // ── Pré-extraction des paramètres de simulation (pour Zone 1 et Zone 2)
+  // ── Pré-extraction des paramètres de simulation
   let simParams: SimParam[] = [];
   let simFormulaRaw = formulaRaw;
-  let zone1FormulaFR = "";
-  let zone1FormulaEN = "";
+  let zone1Formula = "";
 
   if (tables.length > 0) {
     const { params, formulaRaw: extracted } = extractSimulationParams(tables[0]);
@@ -647,14 +433,13 @@ export async function downloadFormulaAsExcel(
     simFormulaRaw = extracted || formulaRaw;
 
     if (simParams.length > 0 && simFormulaRaw) {
-      const rewritten = rewriteFormulaForSimulation(simFormulaRaw, simParams, simDataStartRow);
-      zone1FormulaFR = rewritten.fr;
-      zone1FormulaEN = rewritten.en;
+      zone1Formula = rewriteFormulaForSimulation(simFormulaRaw, simParams, simDataStartRow);
+      zone1Formula = postProcessFormula(zone1Formula, format);
     }
   }
 
-  // ── Section formules à copier-coller (point principal de valeur)
-  const writeSection = (row: number, label: string, value: string, color: string, bgColor: string) => {
+  // ── Section formule à copier-coller
+  const writeSection = (row: number, label: string, value: string) => {
     const labelCell = sheet2.getCell(`B${row}`);
     labelCell.value = label;
     labelCell.font = { name: "Segoe UI", size: 9, bold: true, color: { argb: SLATE_500 } };
@@ -662,8 +447,8 @@ export async function downloadFormulaAsExcel(
     sheet2.mergeCells(`C${row}:H${row}`);
     const valCell = sheet2.getCell(`C${row}`);
     valCell.value = value;
-    valCell.font = { name: "Consolas", size: 11, bold: true, color: { argb: color } };
-    valCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bgColor } };
+    valCell.font = { name: "Consolas", size: 11, bold: true, color: { argb: AMBER } };
+    valCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: LIGHT_BG } };
     valCell.alignment = { wrapText: true, vertical: "middle" };
     valCell.border = {
       top: { style: "thin", color: { argb: "FFE2E8F0" } },
@@ -682,24 +467,18 @@ export async function downloadFormulaAsExcel(
   sheet2.getRow(nextRow).height = 22;
   nextRow++;
 
-  // Utiliser les formules réécrites (Zone 2) si disponibles, sinon les originales
-  const displayFormulaFR = zone1FormulaFR || formulaRaw;
-  const displayFormulaEN = zone1FormulaEN || formulaEnglish;
+  // Utiliser la formule réécrite si disponible, sinon l'originale
+  const displayFormula = zone1Formula || formulaRaw;
 
-  if (displayFormulaFR) {
-    writeSection(nextRow, "Version FR :", displayFormulaFR, AMBER, LIGHT_BG);
-    nextRow++;
-  }
-
-  if (displayFormulaEN && displayFormulaEN !== displayFormulaFR) {
-    writeSection(nextRow, "Version EN :", displayFormulaEN, "FF16803C", "FFF0FDF4");
+  if (displayFormula) {
+    writeSection(nextRow, "Formule :", displayFormula);
     nextRow++;
   }
 
   // Note instructions
   sheet2.mergeCells(`B${nextRow}:H${nextRow}`);
   const instrCell = sheet2.getCell(`B${nextRow}`);
-  instrCell.value = "👆  Copiez la formule ci-dessus et collez-la dans une cellule vide de votre classeur Excel.";
+  instrCell.value = "👆  Copiez la formule ci-dessus et collez-la dans une cellule vide de votre classeur.";
   instrCell.font = { name: "Segoe UI", size: 9, italic: true, color: { argb: SLATE_500 } };
   sheet2.getRow(nextRow).height = 18;
   nextRow += 2;
@@ -782,10 +561,10 @@ export async function downloadFormulaAsExcel(
     }
 
     // ── Ligne séparatrice
-    const sepRow = sheet2.getRow(nextRow);
-    sepRow.height = 4;
+    const sepRow1 = sheet2.getRow(nextRow);
+    sepRow1.height = 4;
     for (let c = 2; c <= 4; c++) {
-      const cell = sepRow.getCell(c);
+      const cell = sepRow1.getCell(c);
       cell.border = {
         bottom: { style: "thin", color: { argb: "FFE2E8F0" } },
       };
@@ -803,12 +582,14 @@ export async function downloadFormulaAsExcel(
     resLabel.alignment = { vertical: "middle" };
 
     // Formule réécrite (cellule verte active)
-    const { en: formulaEN } = rewriteFormulaForSimulation(
-      simFormulaRaw, simParams, simDataStartRow
-    );
+    let activeFormula = rewriteFormulaForSimulation(simFormulaRaw, simParams, simDataStartRow);
+    // Convertir en US-invariant pour le <f> OOXML (toujours anglais dans le XML)
+    activeFormula = convertToUsInvariant(activeFormula, format);
+    // Post-traiter XLOOKUP→INDEX+MATCH pour LibreOffice
+    activeFormula = postProcessFormula(activeFormula, "libreoffice-en");
 
     const resCell = resultRowSim.getCell(3);
-    resCell.value = { formula: formulaEN.replace(/^=/, "") };
+    resCell.value = { formula: activeFormula.replace(/^=/, "") };
     resCell.font = { name: "Consolas", size: 12, bold: true, color: { argb: "FF166534" } };
     resCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF0FDF4" } };
     resCell.numFmt = "#,##0.00";
@@ -868,10 +649,28 @@ export async function downloadFormulaAsExcel(
   }
 
   // ─────────────────────────────────────────────────────────────
-  // GÉNÉRATION ET TÉLÉCHARGEMENT
+  // GÉNÉRATION + PATCH XML (ca="1" pour forcer recalcul)
   // ─────────────────────────────────────────────────────────────
-  const buffer = await workbook.xlsx.writeBuffer();
-  const blob = new Blob([buffer], {
+  const rawBuffer = await workbook.xlsx.writeBuffer();
+  const zip = await JSZip.loadAsync(rawBuffer);
+
+  // Patch : ajouter ca="1" sur chaque <f> pour forcer LibreOffice à réinterpréter
+  for (const filename of Object.keys(zip.files)) {
+    if (filename.startsWith("xl/worksheets/sheet") && filename.endsWith(".xml")) {
+      let xml = await zip.file(filename)!.async("string");
+      // <f>content</f> → <f ca="1">content</f>
+      xml = xml.replace(/<f>([^<]*)<\/f>/g, '<f ca="1">$1</f>');
+      // <f t="shared" si="0"> → <f ca="1" t="shared" si="0"> (skip si ca existe déjà)
+      xml = xml.replace(/<f ([^>]*?)>/g, (match, attrs: string) => {
+        if (/\bca\s*=/.test(attrs)) return match; // déjà présent
+        return `<f ca="1" ${attrs}>`;
+      });
+      zip.file(filename, xml);
+    }
+  }
+
+  const patchedBuffer = await zip.generateAsync({ type: "nodebuffer" });
+  const blob = new Blob([patchedBuffer as unknown as ArrayBuffer], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
 
