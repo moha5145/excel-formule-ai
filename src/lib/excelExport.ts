@@ -132,67 +132,49 @@ function extractSimulationParams(
   return { params, columns, formulaRaw };
 }
 
-// Réécrit une formule pour la simulation : références → cellules Zone 2, taux/100
+// Réécrit une formule pour la simulation : texte → littéraux, taux → /100
 function rewriteFormulaForSimulation(
   formula: string,
   params: SimParam[],
   dataStartRow: number
 ): string {
-  const valueCol = "C";
-
-  // Map : cellRef origine → cellule Zone 2
-  const cellMap: Record<string, string> = {};
-  for (let i = 0; i < params.length; i++) {
-    cellMap[params[i].cellRef] = `${valueCol}${dataStartRow + i}`;
-  }
-
-  // Réécrire les références
   let rewritten = formula;
-  for (const [origRef, targetRef] of Object.entries(cellMap)) {
-    const param = params.find(p => p.cellRef === origRef);
-    const escaped = origRef.replace(/\$/g, "\\$");
+
+  // Pour chaque paramètre texte isolé (pas dans une plage), remplacer par "valeur"
+  for (const param of params) {
+    if (param.type !== 'text') continue;
+
+    const cellRef = param.cellRef;
+    const escaped = cellRef.replace(/\$/g, "\\$/");
+
+    // Vérifier si la référence est dans une plage (ex: C10:C12)
+    const isInRange = new RegExp(`:\\s*${escaped}|${escaped}\\s*:`, "i").test(rewritten);
+    if (isInRange) continue;
+
+    // Référence isolée → remplacer par "valeur"
     const regex = new RegExp(`\\b${escaped}(?!\\w)`, "g");
-
-    if (param?.type === "text") {
-      // Vérifier si la référence fait partie d'une plage (ex: C12:C13)
-      const rangeWithRef = new RegExp(`:\\s*${escaped}|${escaped}\\s*:`, "i").test(rewritten);
-      if (rangeWithRef) {
-        // Plage : garder comme référence cellule Zone 2 (sinon "val1":"val2" est invalide)
-        rewritten = rewritten.replace(regex, targetRef);
-      } else {
-        // Référence isolée : remplacer par la valeur textuelle entre guillemets
-        rewritten = rewritten.replace(regex, `"${param.rawValue}"`);
-      }
-    } else {
-      // Numérique/date : remplacer par la cellule Zone 2
-      rewritten = rewritten.replace(regex, targetRef);
-    }
+    rewritten = rewritten.replace(regex, `"${param.rawValue}"`);
   }
 
-  // Insérer /100 pour les taux — détection intelligente
-  // Vérifie la formule ORIGINALE pour décider si /100 est nécessaire
-  for (let i = 0; i < params.length; i++) {
-    if (params[i].needsDivideBy100) {
-      const origRef = params[i].cellRef;
-      const targetCell = `${valueCol}${dataStartRow + i}`;
-      const escapedOrig = origRef.replace(/\$/g, "\\$");
+  // Ajouter /100 pour les taux
+  for (const param of params) {
+    if (!param.needsDivideBy100) continue;
 
-      // 1) La formule originale a-t-elle déjà /{cellRef}/100 ?
-      const hasDivideBy100 = new RegExp(`${escapedOrig}/100`).test(formula);
+    const cellRef = param.cellRef;
+    const escaped = cellRef.replace(/\$/g, "\\$");
 
-      // 2) La cellule est-elle dans un contexte de comparaison (>=, <=, =, <, >) ?
-      const hasComparison = new RegExp(`${escapedOrig}\\s*[<>=]`).test(formula);
+    // Vérifier si déjà /100
+    const hasDivide = new RegExp(`${escaped}/100`).test(formula);
+    if (hasDivide) continue;
 
-      if (!hasDivideBy100 && !hasComparison) {
-        // Ajouter /100 — ni déjà présent, ni en contexte de comparaison
-        const rateRegex = new RegExp(`(${targetCell})(?!\\w|/100)`, "g");
-        rewritten = rewritten.replace(rateRegex, "$1/100");
-      }
-    }
+    // Vérifier si en contexte de comparaison
+    const hasComparison = new RegExp(`${escaped}\\s*[<>=]`).test(formula);
+    if (hasComparison) continue;
+
+    // Ajouter /100
+    const rateRegex = new RegExp(`(${escaped})(?!\\w|/100)`, "g");
+    rewritten = rewritten.replace(rateRegex, "$1/100");
   }
-
-  // Ajouter * manquant entre référence cellule et nombre décimal (safety net)
-  rewritten = rewritten.replace(/([A-Z]\d+)\.(\d+)/g, "$1*0.$2");
 
   return rewritten;
 }
