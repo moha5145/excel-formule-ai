@@ -38,8 +38,8 @@ function extractSimulationParams(
   const columns: SimColumn[] = [];
   let formulaRaw = "";
 
-  // Headers = première ligne, en excluant "Ligne"
-  const headers = table.rows[0].slice(1);
+  // Headers = première ligne du tableau (header row), en excluant "Ligne"
+  const headers = table.headers.slice(1);
 
   // Initialiser les colonnes
   for (let c = 0; c < headers.length; c++) {
@@ -54,7 +54,7 @@ function extractSimulationParams(
 
   const dataStartRow = 10;
 
-  for (let rowIdx = 1; rowIdx < dataEndRow; rowIdx++) {
+  for (let rowIdx = 0; rowIdx < dataEndRow; rowIdx++) {
     const row = table.rows[rowIdx];
 
     for (let colIdx = 0; colIdx < headers.length; colIdx++) {
@@ -62,7 +62,7 @@ function extractSimulationParams(
       if (!value) continue;
 
       const col = columns[colIdx];
-      const cellRef = `${col.letter}${dataStartRow + rowIdx - 1}`;
+      const cellRef = `${col.letter}${dataStartRow + rowIdx}`;
 
       // Détecter le type
       const isDate = /\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}/.test(value) ||
@@ -114,7 +114,7 @@ function extractSimulationParams(
         cellRef,
         colLetter: col.letter,
         colName: col.header,
-        rowIndex: rowIdx - 1,
+        rowIndex: rowIdx,
         needsDivideBy100,
       };
 
