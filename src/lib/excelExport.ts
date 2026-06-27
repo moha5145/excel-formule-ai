@@ -530,10 +530,24 @@ export async function downloadFormulaAsExcel(
     // ── Headers du tableau de simulation
     const simHeaderRow = sheet2.getRow(nextRow);
     simHeaderRow.height = 24;
-    const simHeaders = ["Paramètre", "Valeur", "Description"];
-    for (let h = 0; h < simHeaders.length; h++) {
-      const cell = simHeaderRow.getCell(h + 2);
-      cell.value = simHeaders[h];
+
+    // Colonne B : "Ligne"
+    const labelHeader = simHeaderRow.getCell(2);
+    labelHeader.value = "Ligne";
+    labelHeader.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: WHITE } };
+    labelHeader.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF334155" } };
+    labelHeader.alignment = { horizontal: "center", vertical: "middle" };
+    labelHeader.border = {
+      top: { style: "thin", color: { argb: "FF475569" } },
+      bottom: { style: "medium", color: { argb: "FF1E293B" } },
+      left: { style: "thin", color: { argb: "FF475569" } },
+      right: { style: "thin", color: { argb: "FF475569" } },
+    };
+
+    // Colonnes de données : headers depuis simColumns
+    for (let c = 0; c < simColumns.length; c++) {
+      const cell = simHeaderRow.getCell(3 + c);
+      cell.value = simColumns[c].header;
       cell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: WHITE } };
       cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF334155" } };
       cell.alignment = { horizontal: "center", vertical: "middle" };
@@ -546,66 +560,68 @@ export async function downloadFormulaAsExcel(
     }
     nextRow++;
 
-    // ── Lignes de paramètres (cellules d'entrée)
+    // ── Lignes de données
     const GOLD_BORDER = "FFD97706";
     const LIGHT_YELLOW = "FFFEF3C7";
 
-    for (let i = 0; i < simParams.length; i++) {
-      const p = simParams[i];
+    // Nombre de lignes = max des params par colonne
+    const numRows = Math.max(...simColumns.map(c => c.params.length), 0);
+
+    for (let r = 0; r < numRows; r++) {
       const row = sheet2.getRow(nextRow);
       row.height = 22;
 
-      // Colonne B : Nom du paramètre
-      const nameCell = row.getCell(2);
-      nameCell.value = p.name;
-      nameCell.font = { name: "Segoe UI", size: 10, color: { argb: "FF475569" } };
-      nameCell.alignment = { vertical: "middle" };
+      // Colonne B : label "Ligne N"
+      const labelCell = row.getCell(2);
+      labelCell.value = `Ligne ${r + 1}`;
+      labelCell.font = { name: "Segoe UI", size: 10, color: { argb: "FF475569" } };
+      labelCell.alignment = { vertical: "middle" };
 
-      // Colonne C : Valeur (cellule modifiable, fond jaune)
-      const valCell = row.getCell(3);
-      valCell.font = { name: "Segoe UI", size: 11, bold: true, color: { argb: SLATE_900 } };
-      valCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: LIGHT_YELLOW } };
-      valCell.alignment = { horizontal: "right", vertical: "middle" };
-      valCell.border = {
-        top: { style: "thin", color: { argb: GOLD_BORDER } },
-        bottom: { style: "thin", color: { argb: GOLD_BORDER } },
-        left: { style: "thin", color: { argb: GOLD_BORDER } },
-        right: { style: "thin", color: { argb: GOLD_BORDER } },
-      };
+      // Colonnes de données
+      for (let c = 0; c < simColumns.length; c++) {
+        const col = simColumns[c];
+        const param = col.params[r];
+        const cell = row.getCell(3 + c);
 
-      if (p.type === "text") {
-        valCell.value = p.rawValue;
-        valCell.alignment = { horizontal: "left", vertical: "middle" };
-      } else if (p.type === "date") {
-        valCell.value = p.rawValue;
-        valCell.alignment = { horizontal: "center", vertical: "middle" };
-      } else if (p.type === "percentage") {
-        valCell.value = p.value;
-        valCell.numFmt = '0.0"%"';
-      } else if (p.type === "currency") {
-        valCell.value = p.value;
-        valCell.numFmt = "#,##0.00";
-      } else if (p.type === "integer") {
-        valCell.value = p.value;
-        valCell.numFmt = "0";
-      } else {
-        valCell.value = p.value;
-        valCell.numFmt = "#,##0.##";
+        cell.font = { name: "Segoe UI", size: 11, bold: true, color: { argb: SLATE_900 } };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: LIGHT_YELLOW } };
+        cell.alignment = { horizontal: "right", vertical: "middle" };
+        cell.border = {
+          top: { style: "thin", color: { argb: GOLD_BORDER } },
+          bottom: { style: "thin", color: { argb: GOLD_BORDER } },
+          left: { style: "thin", color: { argb: GOLD_BORDER } },
+          right: { style: "thin", color: { argb: GOLD_BORDER } },
+        };
+
+        if (param) {
+          if (param.type === "text") {
+            cell.value = param.rawValue;
+            cell.alignment = { horizontal: "left", vertical: "middle" };
+          } else if (param.type === "date") {
+            cell.value = param.rawValue;
+            cell.alignment = { horizontal: "center", vertical: "middle" };
+          } else if (param.type === "percentage") {
+            cell.value = param.value;
+            cell.numFmt = '0.0"%"';
+          } else if (param.type === "currency") {
+            cell.value = param.value;
+            cell.numFmt = "#,##0.00";
+          } else if (param.type === "integer") {
+            cell.value = param.value;
+            cell.numFmt = "0";
+          } else {
+            cell.value = param.value;
+            cell.numFmt = "#,##0.##";
+          }
+        }
       }
-
-      // Colonne D : Description/Unité
-      const descCell = row.getCell(4);
-      descCell.value = p.unit || "";
-      descCell.font = { name: "Segoe UI", size: 9, italic: true, color: { argb: "FF64748B" } };
-      descCell.alignment = { vertical: "middle" };
-
       nextRow++;
     }
 
     // ── Ligne séparatrice
     const sepRow1 = sheet2.getRow(nextRow);
     sepRow1.height = 4;
-    for (let c = 2; c <= 4; c++) {
+    for (let c = 2; c <= 2 + simColumns.length; c++) {
       const cell = sepRow1.getCell(c);
       cell.border = {
         bottom: { style: "thin", color: { argb: "FFE2E8F0" } },
@@ -617,7 +633,6 @@ export async function downloadFormulaAsExcel(
     const resultRowSim = sheet2.getRow(nextRow);
     resultRowSim.height = 26;
 
-    // Label résultat
     const resLabel = resultRowSim.getCell(2);
     resLabel.value = "→ Résultat";
     resLabel.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: "FF166534" } };
@@ -625,16 +640,13 @@ export async function downloadFormulaAsExcel(
 
     // Formule réécrite (cellule verte active)
     let activeFormula = rewriteFormulaForSimulation(simFormulaRaw, simParams, simDataStartRow);
-    // Convertir en US-invariant pour le <f> OOXML (toujours anglais dans le XML)
     activeFormula = convertToUsInvariant(activeFormula, format);
-    // Post-traiter XLOOKUP→INDEX+MATCH pour LibreOffice
     activeFormula = postProcessFormula(activeFormula, "libreoffice-en");
 
     const resCell = resultRowSim.getCell(3);
     resCell.value = { formula: activeFormula.replace(/^=/, "") };
     resCell.font = { name: "Consolas", size: 12, bold: true, color: { argb: "FF166534" } };
     resCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF0FDF4" } };
-    // Format texte pour les formules de concaténation (&), sinon numérique
     const isTextFormula = /&\s*["']|["']\s*&|TEXTE\s*\(|TEXT\s*\(/i.test(activeFormula);
     resCell.numFmt = isTextFormula ? "@" : "#,##0.00";
     resCell.alignment = { horizontal: "right", vertical: "middle" };
@@ -644,13 +656,6 @@ export async function downloadFormulaAsExcel(
       left: { style: "medium", color: { argb: "FF16A34A" } },
       right: { style: "medium", color: { argb: "FF16A34A" } },
     };
-
-    // Unité résultat
-    const resUnit = resultRowSim.getCell(4);
-    const lastParam = simParams[simParams.length - 1];
-    resUnit.value = lastParam?.unit ? `/${lastParam.unit}` : "";
-    resUnit.font = { name: "Segoe UI", size: 9, italic: true, color: { argb: "FF166534" } };
-    resUnit.alignment = { vertical: "middle" };
 
     nextRow += 2;
 
