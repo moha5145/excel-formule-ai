@@ -86,15 +86,31 @@ RÈGLES ABSOLUES à suivre sans exception :
 STRUCTURE DE RÉPONSE (respecter cet ordre) :
 1. La formule dans un bloc de code markdown.
 2. Une explication concise et professionnelle, adaptée à un financier ou comptable.
-3. INCLURE OBLIGATOIREMENT un tableau Markdown d'exemple avec exactement ces 4 colonnes :
-   | Cellule | Description | Valeur | Résultat attendu |
+3. INCLURE OBLIGATOIREMENT un tableau Markdown d'exemple au format suivant :
+   | Ligne   | Colonne1  | Colonne2 | Colonne3  |
    Règles :
-   - "Cellule" = référence cellule (A1, B2, C3...)
-   - "Description" = nom du paramètre (ex: "Montant du Prêt", "Taux Annuel", "Durée")
-   - "Valeur" = valeur NUMÉRIQUE pure (ex: 250000, 3.5, 20). PAS de texte mixte comme "3.5% ou 0.035". Pour les taux/percentages : utiliser le pourcentage (3.5) PAS le décimal (0.035).
-   - "Résultat attendu" = valeur formatée pour affichage (ex: 250 000 €, 3,50%, 20 ans)
-   - La DERNIÈRE ligne contient la formule dans la colonne "Valeur" (ex: =VPM(B3/12;B4*12;B2))
-   - Les autres colonnes de la ligne formule sont vides
+   - Première colonne = "Ligne" avec labels ("Ligne 1", "Ligne 2", ...)
+   - Colonnes suivantes = données avec en-têtes descriptifs (ex: "Services", "Salaires", "Critère", "Dates", "Régions")
+   - Chaque ligne = un ensemble de valeurs (une par colonne de données)
+   - Cellules vides = pas de valeur pour cette colonne sur cette ligne
+   - Les refs cellule dans la formule utilisent les lettres C, D, E... correspondant aux colonnes :
+     * 1ère colonne de données = C
+     * 2ème colonne de données = D
+     * 3ème colonne de données = E
+   - Les données commencent à la ligne 10 (C10, D10, E10...)
+   - La DERNIÈRE ligne contient la formule dans la dernière colonne (ex: =MAX.SI.ENS(D10:D12;C10:C12;E10))
+   - Les valeurs texte dans la formule sont entre guillemets (ex: "Marketing")
+   - Les taux sont en pourcentage (3.5) PAS en décimal (0.035)
+   - INCLUR TOUTES les plages utilisées dans la formule
+   - Nombres : valeur numérique pure (ex: 250000, 3.5, 20). PAS de texte mixte comme "3.5%"
+   - Dates : date au format JJ/MM/AAAA (ex: 01/01/2024)
+   Exemple avec 3 colonnes :
+   | Ligne   | Services   | Salaires | Critère   |
+   |---------|------------|----------|-----------|
+   | Ligne 1 | Finance    | 45000    | Marketing |
+   | Ligne 2 | Marketing  | 52000    |           |
+   | Ligne 3 | RH         | 48000    |           |
+   |         |            |          | =MAX.SI.ENS(D10:D12;C10:C12;E10) |
 4. La ligne de vérification (✅).`;
 
     const fullPrompt = `${systemInstruction}\n\nRequête utilisateur: ${prompt}`;
