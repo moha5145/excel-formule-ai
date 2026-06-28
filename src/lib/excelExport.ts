@@ -77,7 +77,6 @@ function extractSimulationParams(
       let paramValue: number;
       let dateValue: Date | undefined;
       let unit = "";
-      let needsDivideBy100 = false;
 
       if (isText) {
         paramType = 'text';
@@ -96,8 +95,7 @@ function extractSimulationParams(
       } else if (hasPercent || (numVal > 0 && numVal < 1 && /\d/.test(value))) {
         paramType = 'percentage';
         rawValue = value;
-        paramValue = numVal > 0 && numVal < 1 ? numVal * 100 : numVal;
-        needsDivideBy100 = true;
+        paramValue = hasPercent ? numVal / 100 : numVal;
         unit = "%";
       } else {
         paramType = detectParamType(col.header);
@@ -105,7 +103,7 @@ function extractSimulationParams(
         paramValue = numVal;
 
         // Unité depuis le header
-        if (/%|taux|tx/i.test(col.header)) { unit = "%"; needsDivideBy100 = true; paramType = 'percentage'; }
+        if (/%|taux|tx/i.test(col.header)) { unit = "%"; paramType = 'percentage'; paramValue = numVal > 0 && numVal < 1 ? numVal : numVal / 100; }
         else if (/€|euro|montant|salaire|prime|loyer/i.test(col.header)) unit = "€";
         else if (/dur[ée]e|ann[ée]e|ans|annuel/i.test(col.header)) unit = "ans";
         else if (/mois/i.test(col.header)) unit = "mois";
@@ -123,7 +121,6 @@ function extractSimulationParams(
         colLetter: col.letter,
         colName: col.header,
         rowIndex: rowIdx,
-        needsDivideBy100,
       };
 
       params.push(param);
@@ -138,53 +135,6 @@ function extractSimulationParams(
   }
 
   return { params, columns, formulaRaw };
-}
-
-// Réécrit une formule pour la simulation : texte → littéraux, taux → /100
-function rewriteFormulaForSimulation(
-  formula: string,
-  params: SimParam[],
-  dataStartRow: number
-): string {
-  let rewritten = formula;
-
-  // Pour chaque paramètre texte isolé (pas dans une plage), remplacer par "valeur"
-  for (const param of params) {
-    if (param.type !== 'text') continue;
-
-    const cellRef = param.cellRef;
-    const escaped = cellRef.replace(/\$/g, "\\$/");
-
-    // Vérifier si la référence est dans une plage (ex: C10:C12)
-    const isInRange = new RegExp(`:\\s*${escaped}|${escaped}\\s*:`, "i").test(rewritten);
-    if (isInRange) continue;
-
-    // Référence isolée → remplacer par "valeur"
-    const regex = new RegExp(`\\b${escaped}(?!\\w)`, "g");
-    rewritten = rewritten.replace(regex, `"${param.rawValue}"`);
-  }
-
-  // Ajouter /100 pour les taux
-  for (const param of params) {
-    if (!param.needsDivideBy100) continue;
-
-    const cellRef = param.cellRef;
-    const escaped = cellRef.replace(/\$/g, "\\$");
-
-    // Vérifier si déjà /100
-    const hasDivide = new RegExp(`${escaped}/100`).test(formula);
-    if (hasDivide) continue;
-
-    // Vérifier si en contexte de comparaison
-    const hasComparison = new RegExp(`${escaped}\\s*[<>=]`).test(formula);
-    if (hasComparison) continue;
-
-    // Ajouter /100
-    const rateRegex = new RegExp(`(${escaped})(?!\\w|/100)`, "g");
-    rewritten = rewritten.replace(rateRegex, "$1/100");
-  }
-
-  return rewritten;
 }
 
 // Extrait la formule depuis le code Markdown
@@ -227,7 +177,6 @@ interface SimParam {
   colLetter: string;
   colName: string;
   rowIndex: number;
-  needsDivideBy100: boolean;
 }
 
 interface SimColumn {
@@ -476,8 +425,7 @@ export async function downloadFormulaAsExcel(
     simFormulaRaw = extracted || formulaRaw;
 
     if (simParams.length > 0 && simFormulaRaw) {
-      zone1Formula = rewriteFormulaForSimulation(simFormulaRaw, simParams, simDataStartRow);
-      zone1Formula = postProcessFormula(zone1Formula, format);
+      zone1Formula = postProcessFormula(simFormulaRaw, format);
     }
   }
 
@@ -616,7 +564,7 @@ export async function downloadFormulaAsExcel(
             cell.alignment = { horizontal: "center", vertical: "middle" };
           } else if (param.type === "percentage") {
             cell.value = param.value;
-            cell.numFmt = '0.0"%"';
+            cell.numFmt = '0.00%';
           } else if (param.type === "currency") {
             cell.value = param.value;
             cell.numFmt = "#,##0.00";
@@ -652,9 +600,8 @@ export async function downloadFormulaAsExcel(
     resLabel.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: "FF166534" } };
     resLabel.alignment = { vertical: "middle" };
 
-    // Formule réécrite (cellule verte active)
-    let activeFormula = rewriteFormulaForSimulation(simFormulaRaw, simParams, simDataStartRow);
-    activeFormula = convertToUsInvariant(activeFormula, format);
+    // Formule (cellule verte active)
+    let activeFormula = convertToUsInvariant(simFormulaRaw, format);
     activeFormula = postProcessFormula(activeFormula, "libreoffice-en");
 
     const resCell = resultRowSim.getCell(3);

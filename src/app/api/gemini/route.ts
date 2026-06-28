@@ -102,10 +102,9 @@ STRUCTURE DE RÉPONSE (respecter cet ordre) :
      * etc.
    - Les données commencent à la ligne 10 (C10, D10, E10, F10...)
    - La DERNIÈRE ligne contient la formule dans la dernière colonne (ex: =MAX.SI.ENS(D10:D12;C10:C12;E10))
-   - Les valeurs texte dans la formule sont entre guillemets (ex: "Marketing")
-   - Les taux sont en pourcentage (3.5) PAS en décimal (0.035)
-   - INCLUR TOUTES les plages utilisées dans la formule
-   - Nombres : valeur numérique pure (ex: 250000, 3.5, 20). PAS de texte mixte comme "3.5%"
+   - UTILISEZ TOUJOURS les références de cellules pour TOUS vos paramètres (texte, taux, dates, etc.) au lieu de coder des valeurs en dur (ex: préférez utiliser E10 plutôt que "Marketing", 15% ou "15/01/2024"). La formule doit être 100% interactive.
+   - INCLURE TOUTES les plages utilisées dans la formule.
+   - Nombres : valeur numérique pure (ex: 250000, 20). Pour les taux/pourcentages, incluez le signe % dans le tableau (ex: 3.5% ou 15%).
    - Dates : date au format JJ/MM/AAAA (ex: 01/01/2024)
    Exemple avec 3 colonnes :
    | Ligne   | Services   | Salaires | Critère   |
