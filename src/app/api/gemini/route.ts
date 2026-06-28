@@ -93,11 +93,14 @@ STRUCTURE DE RÉPONSE (respecter cet ordre) :
    - Colonnes suivantes = données avec en-têtes descriptifs (ex: "Services", "Salaires", "Critère", "Dates", "Régions")
    - Chaque ligne = un ensemble de valeurs (une par colonne de données)
    - Cellules vides = pas de valeur pour cette colonne sur cette ligne
-   - Les refs cellule dans la formule utilisent les lettres C, D, E... correspondant aux colonnes :
+   - Les refs cellule dans la formule utilisent l'ordre alphabétique (C, D, E, F, G...) pour chaque colonne de données (de gauche à droite) :
      * 1ère colonne de données = C
      * 2ème colonne de données = D
      * 3ème colonne de données = E
-   - Les données commencent à la ligne 10 (C10, D10, E10...)
+     * 4ème colonne de données = F
+     * 5ème colonne de données = G
+     * etc.
+   - Les données commencent à la ligne 10 (C10, D10, E10, F10...)
    - La DERNIÈRE ligne contient la formule dans la dernière colonne (ex: =MAX.SI.ENS(D10:D12;C10:C12;E10))
    - Les valeurs texte dans la formule sont entre guillemets (ex: "Marketing")
    - Les taux sont en pourcentage (3.5) PAS en décimal (0.035)

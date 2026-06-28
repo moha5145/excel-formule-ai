@@ -75,6 +75,7 @@ function extractSimulationParams(
       let paramType: SimParam['type'];
       let rawValue: string;
       let paramValue: number;
+      let dateValue: Date | undefined;
       let unit = "";
       let needsDivideBy100 = false;
 
@@ -86,6 +87,12 @@ function extractSimulationParams(
         paramType = 'date';
         rawValue = value;
         paramValue = 0;
+        let m = value.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+        if (m) dateValue = new Date(parseInt(m[3], 10), parseInt(m[2], 10) - 1, parseInt(m[1], 10));
+        else {
+          m = value.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/);
+          if (m) dateValue = new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10));
+        }
       } else if (hasPercent || (numVal > 0 && numVal < 1 && /\d/.test(value))) {
         paramType = 'percentage';
         rawValue = value;
@@ -109,6 +116,7 @@ function extractSimulationParams(
         name: value,
         value: paramValue,
         rawValue,
+        dateValue,
         type: paramType,
         unit,
         cellRef,
@@ -212,6 +220,7 @@ interface SimParam {
   name: string;
   value: number;
   rawValue: string;
+  dateValue?: Date;
   type: 'percentage' | 'currency' | 'integer' | 'number' | 'text' | 'date';
   unit: string;
   cellRef: string;
@@ -598,7 +607,12 @@ export async function downloadFormulaAsExcel(
             cell.value = param.rawValue;
             cell.alignment = { horizontal: "left", vertical: "middle" };
           } else if (param.type === "date") {
-            cell.value = param.rawValue;
+            if (param.dateValue) {
+              cell.value = param.dateValue;
+              cell.numFmt = "dd/mm/yyyy";
+            } else {
+              cell.value = param.rawValue;
+            }
             cell.alignment = { horizontal: "center", vertical: "middle" };
           } else if (param.type === "percentage") {
             cell.value = param.value;

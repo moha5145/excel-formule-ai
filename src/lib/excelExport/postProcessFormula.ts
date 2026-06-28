@@ -26,13 +26,22 @@ const FRENCH_TO_ENGLISH: Record<string, string> = {
 };
 
 export function postProcessFormula(formula: string, format: ExportFormat): string {
+  let result = formula;
   if (format === "libreoffice-en") {
-    return convertXlookupToIndexMatch(formula, "en");
+    result = convertXlookupToIndexMatch(result, "en");
   }
   if (format === "libreoffice-fr") {
-    return convertXlookupToIndexMatch(formula, "fr");
+    result = convertXlookupToIndexMatch(result, "fr");
   }
-  return formula;
+
+  // Inject _xlfn. for modern Excel functions so they work in LibreOffice & Excel when exported via ExcelJS
+  const modernFns = ["MAXIFS", "MINIFS", "IFS", "IFNA", "CONCAT", "TEXTJOIN", "SWITCH", "XLOOKUP", "XMATCH"];
+  for (const fn of modernFns) {
+    const regex = new RegExp(`(?:_xlfn\\.)?(\\b${fn}\\b)(?=\\s*\\()`, "gi");
+    result = result.replace(regex, "_xlfn.$1");
+  }
+
+  return result;
 }
 
 export function convertToUsInvariant(formula: string, format: ExportFormat): string {
