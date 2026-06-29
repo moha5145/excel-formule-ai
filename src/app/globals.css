@@ -119,3 +119,9 @@
   background: rgba(161, 98, 7, 0.3);
   border-radius: 3px;
 }
+
+/* Bordure épaisse avant la ligne de formule dans les tableaux */
+.prose table tbody tr:last-child td,
+.prose table tbody tr:last-child th {
+  border-top: 3px double rgba(161, 98, 7, 0.35) !important;
+}

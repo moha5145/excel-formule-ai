@@ -101,7 +101,8 @@ STRUCTURE DE RÉPONSE (respecter cet ordre) :
      * 5ème colonne de données = G
      * etc.
    - Les données commencent à la ligne 10 (C10, D10, E10, F10...)
-   - La DERNIÈRE ligne contient la formule dans la dernière colonne (ex: =MAX.SI.ENS(D10:D12;C10:C12;E10))
+    - La DERNIÈRE ligne contient la formule dans la dernière colonne (ex: =MAX.SI.ENS(D10:D12;C10:C12;E10))
+    - NE JAMAIS ajouter de ligne vide avant la ligne de formule. La ligne de formule doit être collée directement aux données, sans saut de ligne.
    - UTILISEZ TOUJOURS les références de cellules pour TOUS vos paramètres (texte, taux, dates, etc.) au lieu de coder des valeurs en dur (ex: préférez utiliser E10 plutôt que "Marketing", 15% ou "15/01/2024"). La formule doit être 100% interactive.
    - INCLURE TOUTES les plages utilisées dans la formule.
    - Nombres : valeur numérique pure (ex: 250000, 20). Pour les taux/pourcentages, incluez le signe % dans le tableau (ex: 3.5% ou 15%).

@@ -580,18 +580,7 @@ export async function downloadFormulaAsExcel(
       nextRow++;
     }
 
-    // ── Ligne séparatrice
-    const sepRow1 = sheet2.getRow(nextRow);
-    sepRow1.height = 4;
-    for (let c = 2; c <= 2 + simColumns.length; c++) {
-      const cell = sepRow1.getCell(c);
-      cell.border = {
-        bottom: { style: "thin", color: { argb: "FFE2E8F0" } },
-      };
-    }
-    nextRow++;
-
-    // ── Ligne Résultat (formule active)
+    // ── Ligne Résultat (formule active) avec bordure épaisse
     const resultRowSim = sheet2.getRow(nextRow);
     resultRowSim.height = 26;
 
@@ -599,6 +588,9 @@ export async function downloadFormulaAsExcel(
     resLabel.value = "→ Résultat";
     resLabel.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: "FF166534" } };
     resLabel.alignment = { vertical: "middle" };
+    resLabel.border = {
+      top: { style: "medium", color: { argb: GOLD_BORDER } },
+    };
 
     // Formule (cellule verte active)
     let activeFormula = convertToUsInvariant(simFormulaRaw, format);
@@ -612,7 +604,7 @@ export async function downloadFormulaAsExcel(
     resCell.numFmt = isTextFormula ? "@" : "#,##0.00";
     resCell.alignment = { horizontal: "right", vertical: "middle" };
     resCell.border = {
-      top: { style: "medium", color: { argb: "FF16A34A" } },
+      top: { style: "medium", color: { argb: GOLD_BORDER } },
       bottom: { style: "medium", color: { argb: "FF16A34A" } },
       left: { style: "medium", color: { argb: "FF16A34A" } },
       right: { style: "medium", color: { argb: "FF16A34A" } },
