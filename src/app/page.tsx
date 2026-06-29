@@ -14,6 +14,7 @@ import { downloadFormulaAsExcel } from "@/lib/excelExport";
 import type { ExportFormat } from "@/lib/excelExport";
 
 interface HistoryItem {
+  id: string;
   prompt: string;
   response: string;
 }
@@ -79,6 +80,20 @@ export default function Home() {
     setPrompt(item.prompt);
     setResponse(item.response);
   }, []);
+
+  // Migrate legacy history items that lack an id
+  useEffect(() => {
+    if (history.length > 0) {
+      const needsMigration = history.some((item) => !item.id);
+      if (needsMigration) {
+        setHistory((prev) => prev.map((item) => ({
+          ...item,
+          id: item.id || crypto.randomUUID(),
+        })));
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [history.length]);
 
   // Copy result
   const handleCopy = useCallback(() => {
@@ -216,7 +231,7 @@ export default function Home() {
 
       setHistory((prev) => {
         const filtered = prev.filter((item) => item.prompt !== prompt);
-        return [{ prompt, response: streamResponse }, ...filtered].slice(0, 10);
+        return [{ id: crypto.randomUUID(), prompt, response: streamResponse }, ...filtered].slice(0, 10);
       });
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Une erreur est survenue.");

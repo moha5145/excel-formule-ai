@@ -1,11 +1,12 @@
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Key, HelpCircle, History, Trash2, ChevronLeft, ChevronRight, Coffee, LogOut } from "lucide-react";
+import { Key, HelpCircle, History, Trash2, ChevronLeft, ChevronRight, Coffee, LogOut, X } from "lucide-react";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { toast } from "sonner";
 
 interface HistoryItem {
+  id: string;
   prompt: string;
   response: string;
 }
@@ -43,6 +44,26 @@ export function AppSidebar({
     toast.success("Historique effacé.");
   };
 
+  const handleDeleteItem = (id: string) => {
+    const item = history.find((item) => item.id === id);
+    if (!item) return;
+
+    setHistory((prev) => prev.filter((item) => item.id !== id));
+
+    toast("Requête supprimée.", {
+      action: {
+        label: "Annuler",
+        onClick: () => {
+          setHistory((prev) => {
+            const exists = prev.some((i) => i.id === id);
+            if (exists) return prev;
+            return [item, ...prev];
+          });
+        },
+      },
+      duration: 5000,
+    });
+  };
 
   return (
     <aside
@@ -145,22 +166,31 @@ export function AppSidebar({
             </div>
           ) : (
             <div className="flex flex-col gap-1.5 overflow-y-auto max-h-[420px] pr-0.5">
-              {history.map((item, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => onRestoreHistory(item)}
-                  className="text-left w-full px-3 py-2.5 rounded-xl bg-slate-800/40 hover:bg-primary/10 border border-slate-800 hover:border-primary/30 transition-all group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
-                  title={item.prompt}
-                  aria-label={`Restaurer la requête historique : ${item.prompt}`}
-                >
-                  <p className="text-xs text-slate-300 group-hover:text-primary truncate transition-colors font-medium leading-tight">
-                    {item.prompt}
-                  </p>
-                  <p className="text-[10px] text-slate-600 mt-0.5 truncate">
-                    {item.response.replace(/[#*`]/g, "").substring(0, 50)}…
-                  </p>
-                </button>
+              {history.map((item) => (
+                <div key={item.id} className="group relative">
+                  <button
+                    type="button"
+                    onClick={() => onRestoreHistory(item)}
+                    className="text-left w-full px-3 py-2.5 rounded-xl bg-slate-800/40 hover:bg-primary/10 border border-slate-800 hover:border-primary/30 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                    title={item.prompt}
+                    aria-label={`Restaurer la requête historique : ${item.prompt}`}
+                  >
+                    <p className="text-xs text-slate-300 group-hover:text-primary truncate transition-colors font-medium leading-tight pr-4">
+                      {item.prompt}
+                    </p>
+                    <p className="text-[10px] text-slate-600 mt-0.5 truncate pr-4">
+                      {item.response.replace(/[#*`]/g, "").substring(0, 50)}…
+                    </p>
+                  </button>
+                  <button
+                    onClick={() => handleDeleteItem(item.id)}
+                    className="absolute top-1.5 right-1.5 opacity-60 md:opacity-0 md:group-hover:opacity-100 transition-opacity p-0.5 rounded text-slate-400 hover:text-red-400 hover:bg-red-950/30 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    title="Supprimer cette requête"
+                    aria-label={`Supprimer la requête : ${item.prompt}`}
+                  >
+                    <X size={10} />
+                  </button>
+                </div>
               ))}
             </div>
           )}
