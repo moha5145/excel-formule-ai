@@ -33,10 +33,11 @@ function detectParamType(name: string): SimParam['type'] {
 // Extrait les paramètres de simulation depuis un tableau Markdown multi-colonnes
 function extractSimulationParams(
   table: ExtractedTable
-): { params: SimParam[]; columns: SimColumn[]; formulaRaw: string } {
+): { params: SimParam[]; columns: SimColumn[]; formulaRaw: string; resultLabel: string } {
   const params: SimParam[] = [];
   const columns: SimColumn[] = [];
   let formulaRaw = "";
+  let resultLabel = "Résultat";
 
   // Headers = première ligne du tableau (header row), en excluant "Ligne"
   const headers = table.headers.slice(1);
@@ -132,9 +133,15 @@ function extractSimulationParams(
   if (hasFormulaRow) {
     const formulaCell = lastRow.find(cell => cell.startsWith("="));
     if (formulaCell) formulaRaw = formulaCell;
+
+    // Extraire le nom du résultat depuis la première colonne de la ligne de formule
+    const firstCell = lastRow[0]?.trim();
+    if (firstCell && !firstCell.startsWith("=")) {
+      resultLabel = firstCell;
+    }
   }
 
-  return { params, columns, formulaRaw };
+  return { params, columns, formulaRaw, resultLabel };
 }
 
 // Extrait la formule depuis le code Markdown
@@ -417,12 +424,14 @@ export async function downloadFormulaAsExcel(
   let simColumns: SimColumn[] = [];
   let simFormulaRaw = formulaRaw;
   let zone1Formula = "";
+  let simResultLabel = "Résultat";
 
   if (tables.length > 0) {
-    const { params, columns, formulaRaw: extracted } = extractSimulationParams(tables[0]);
+    const { params, columns, formulaRaw: extracted, resultLabel } = extractSimulationParams(tables[0]);
     simParams = params;
     simColumns = columns;
     simFormulaRaw = extracted || formulaRaw;
+    simResultLabel = resultLabel;
 
     if (simParams.length > 0 && simFormulaRaw) {
       zone1Formula = postProcessFormula(simFormulaRaw, format);
@@ -585,7 +594,7 @@ export async function downloadFormulaAsExcel(
     resultRowSim.height = 26;
 
     const resLabel = resultRowSim.getCell(2);
-    resLabel.value = "→ Résultat";
+    resLabel.value = `→ ${simResultLabel}`;
     resLabel.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: "FF166534" } };
     resLabel.alignment = { vertical: "middle" };
     resLabel.border = {

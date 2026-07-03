@@ -102,6 +102,7 @@ STRUCTURE DE RÉPONSE (respecter cet ordre) :
      * etc.
    - Les données commencent à la ligne 10 (C10, D10, E10, F10...)
     - La DERNIÈRE ligne contient la formule dans la dernière colonne (ex: =MAX.SI.ENS(D10:D12;C10:C12;E10))
+    - La première colonne de la ligne de formule doit contenir un NOM DESCRYPTIF du résultat calculé (ex: "Mensualité", "Total TVA", "Prime", "Salaire max"). Ne laissez JAMAIS cette cellule vide.
     - NE JAMAIS ajouter de ligne vide avant la ligne de formule. La ligne de formule doit être collée directement aux données, sans saut de ligne.
    - UTILISEZ TOUJOURS les références de cellules pour TOUS vos paramètres (texte, taux, dates, etc.) au lieu de coder des valeurs en dur (ex: préférez utiliser E10 plutôt que "Marketing", 15% ou "15/01/2024"). La formule doit être 100% interactive.
    - INCLURE TOUTES les plages utilisées dans la formule.
@@ -110,10 +111,10 @@ STRUCTURE DE RÉPONSE (respecter cet ordre) :
    Exemple avec 3 colonnes :
    | Ligne   | Services   | Salaires | Critère   |
    |---------|------------|----------|-----------|
-   | Ligne 1 | Finance    | 45000    | Marketing |
-   | Ligne 2 | Marketing  | 52000    |           |
-   | Ligne 3 | RH         | 48000    |           |
-   |         |            |          | =MAX.SI.ENS(D10:D12;C10:C12;E10) |
+    | Ligne 1 | Finance    | 45000    | Marketing |
+    | Ligne 2 | Marketing  | 52000    |           |
+    | Ligne 3 | RH         | 48000    |           |
+    | Salaire max |        |          | =MAX.SI.ENS(D10:D12;C10:C12;E10) |
 4. La ligne de vérification (✅).`;
 
     const fullPrompt = `${systemInstruction}\n\nRequête utilisateur: ${prompt}`;
