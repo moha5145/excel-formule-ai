@@ -110,7 +110,11 @@ STRUCTURE DE RÉPONSE (respecter cet ordre) :
    |---------|---------|-------------|----------------|------------|
    | Ligne 1 | 250000  | 3.5%        | 20             | 1 449,90   |
    | Ligne 2 | 150000  | 2.5%        | 15             | 1 001,25   |
-4. La ligne de vérification (✅).`;
+4. La ligne de vérification (✅).
+5. OBLIGATOIRE — À la toute fin de ta réponse, ajoute un commentaire HTML invisible contenant la formule traduite en anglais (noms de fonctions anglais, séparateur virgule, décimal point). Ce commentaire ne sera pas affiché à l'utilisateur. Format exact :
+   <!-- FORMULA_EN: =ENGLISH_FORMULA_HERE -->
+   Exemple : si la formule française est =SOMME.SI.ENS(E10:E12;C10:C12;"Nord";D10:D12;">="&DATE(2024;1;1)), écris :
+   <!-- FORMULA_EN: =SUMIFS(E10:E12,C10:C12,"Nord",D10:D12,">="&DATE(2024,1,1)) -->`;
 
     const fullPrompt = `${systemInstruction}\n\nRequête utilisateur: ${prompt}`;
 

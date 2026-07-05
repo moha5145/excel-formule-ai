@@ -153,6 +153,12 @@ export function extractFormula(markdown: string): string {
   return "";
 }
 
+// Extrait la formule anglaise cachée dans le commentaire HTML <!-- FORMULA_EN: ... -->
+export function extractEnglishFormula(markdown: string): string {
+  const match = markdown.match(/<!--\s*FORMULA_EN:\s*(=.+?)\s*-->/);
+  return match ? match[1].trim() : "";
+}
+
 interface ExtractedTable {
   headers: string[];
   rows: string[][];
@@ -429,7 +435,12 @@ export async function downloadFormulaAsExcel(
   // ── Formule active pour les cellules de résultat (colonne verte)
   const DATA_START_ROW = 10;
   let activeFormula = "";
-  if (simFormulaRaw) {
+  const englishFormula = extractEnglishFormula(response);
+  if (englishFormula) {
+    // Utiliser directement la formule anglaise fournie par l'IA (zéro traduction)
+    activeFormula = postProcessFormula(englishFormula, "libreoffice-en");
+  } else if (simFormulaRaw) {
+    // Fallback : traduction automatique FR→EN
     activeFormula = convertToUsInvariant(simFormulaRaw, format);
     activeFormula = postProcessFormula(activeFormula, "libreoffice-en");
   }
