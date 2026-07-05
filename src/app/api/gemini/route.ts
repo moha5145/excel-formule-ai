@@ -86,13 +86,14 @@ RÈGLES ABSOLUES à suivre sans exception :
 STRUCTURE DE RÉPONSE (respecter cet ordre) :
 1. La formule dans un bloc de code markdown.
 2. Une explication concise et professionnelle, adaptée à un financier ou comptable.
-3. INCLURE OBLIGATOIREMENT un tableau Markdown d'exemple au format suivant :
-   | Ligne   | Colonne1  | Colonne2 | Colonne3  |
+ 3. INCLURE OBLIGATOIREMENT un tableau Markdown d'exemple au format suivant :
+   | Ligne   | Paramètre1 | Paramètre2 | ... | Résultat     |
    Règles :
    - Première colonne = "Ligne" avec labels ("Ligne 1", "Ligne 2", ...)
-   - Colonnes suivantes = données avec en-têtes descriptifs (ex: "Services", "Salaires", "Critère", "Dates", "Régions")
-   - Chaque ligne = un ensemble de valeurs (une par colonne de données)
-   - Cellules vides = pas de valeur pour cette colonne sur cette ligne
+   - Colonnes suivantes = paramètres d'entrée avec en-têtes descriptifs (ex: "Capital", "Taux annuel", "Durée")
+   - La DERNIÈRE colonne contient le RÉSULTAT ATTENDU calculé pour cette ligne. Son en-tête décrit le résultat (ex: "Mensualité", "Total TVA", "Prime", "Salaire max")
+   - Chaque ligne de données doit avoir TOUTES ses colonnes remplies, y compris la dernière colonne avec le résultat attendu
+   - NE PAS inclure de ligne séparée pour le résultat en bas du tableau. PAS de ligne "→ Résultat" ou "→ Mensualité" à la fin
    - Les refs cellule dans la formule utilisent l'ordre alphabétique (C, D, E, F, G...) pour chaque colonne de données (de gauche à droite) :
      * 1ère colonne de données = C
      * 2ème colonne de données = D
@@ -101,20 +102,14 @@ STRUCTURE DE RÉPONSE (respecter cet ordre) :
      * 5ème colonne de données = G
      * etc.
    - Les données commencent à la ligne 10 (C10, D10, E10, F10...)
-    - La DERNIÈRE ligne contient la formule dans la dernière colonne (ex: =MAX.SI.ENS(D10:D12;C10:C12;E10))
-    - La première colonne de la ligne de formule doit contenir un NOM DESCRYPTIF du résultat calculé (ex: "Mensualité", "Total TVA", "Prime", "Salaire max"). Ne laissez JAMAIS cette cellule vide.
-    - NE JAMAIS ajouter de ligne vide avant la ligne de formule. La ligne de formule doit être collée directement aux données, sans saut de ligne.
-   - UTILISEZ TOUJOURS les références de cellules pour TOUS vos paramètres (texte, taux, dates, etc.) au lieu de coder des valeurs en dur (ex: préférez utiliser E10 plutôt que "Marketing", 15% ou "15/01/2024"). La formule doit être 100% interactive.
-   - INCLURE TOUTES les plages utilisées dans la formule.
+   - UTILISEZ TOUJOURS les références de cellules pour TOUS vos paramètres (texte, taux, dates, etc.) au lieu de coder des valeurs en dur. La formule doit être 100% interactive.
    - Nombres : valeur numérique pure (ex: 250000, 20). Pour les taux/pourcentages, incluez le signe % dans le tableau (ex: 3.5% ou 15%).
    - Dates : date au format JJ/MM/AAAA (ex: 01/01/2024)
-   Exemple avec 3 colonnes :
-   | Ligne   | Services   | Salaires | Critère   |
-   |---------|------------|----------|-----------|
-    | Ligne 1 | Finance    | 45000    | Marketing |
-    | Ligne 2 | Marketing  | 52000    |           |
-    | Ligne 3 | RH         | 48000    |           |
-    | Salaire max |        |          | =MAX.SI.ENS(D10:D12;C10:C12;E10) |
+   Exemple avec 3 paramètres :
+   | Ligne   | Capital | Taux annuel | Durée (années) | Mensualité |
+   |---------|---------|-------------|----------------|------------|
+   | Ligne 1 | 250000  | 3.5%        | 20             | 1 449,90   |
+   | Ligne 2 | 150000  | 2.5%        | 15             | 1 001,25   |
 4. La ligne de vérification (✅).`;
 
     const fullPrompt = `${systemInstruction}\n\nRequête utilisateur: ${prompt}`;

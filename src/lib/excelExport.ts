@@ -48,14 +48,9 @@ function extractSimulationParams(
     columns.push({ letter: colLetter, header: headers[c], params: [] });
   }
 
-  // Extraire les données (rows 1 à N-1, exclure la dernière ligne si formule)
-  const lastRow = table.rows[table.rows.length - 1];
-  const hasFormulaRow = lastRow.some(cell => cell.startsWith("="));
-  const dataEndRow = hasFormulaRow ? table.rows.length - 1 : table.rows.length;
-
   const dataStartRow = 10;
 
-  for (let rowIdx = 0; rowIdx < dataEndRow; rowIdx++) {
+  for (let rowIdx = 0; rowIdx < table.rows.length; rowIdx++) {
     const row = table.rows[rowIdx];
 
     for (let colIdx = 0; colIdx < headers.length; colIdx++) {
@@ -64,6 +59,8 @@ function extractSimulationParams(
 
       const col = columns[colIdx];
       const cellRef = `${col.letter}${dataStartRow + rowIdx}`;
+
+      const isResultCol = colIdx === headers.length - 1;
 
       // Détecter le type
       const isDate = /\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}/.test(value) ||
@@ -103,7 +100,6 @@ function extractSimulationParams(
         rawValue = value;
         paramValue = numVal;
 
-        // Unité depuis le header
         if (/%|taux|tx/i.test(col.header)) { unit = "%"; paramType = 'percentage'; paramValue = numVal > 0 && numVal < 1 ? numVal : numVal / 100; }
         else if (/€|euro|montant|salaire|prime|loyer/i.test(col.header)) unit = "€";
         else if (/dur[ée]e|ann[ée]e|ans|annuel/i.test(col.header)) unit = "ans";
@@ -116,28 +112,17 @@ function extractSimulationParams(
         value: paramValue,
         rawValue,
         dateValue,
-        type: paramType,
-        unit,
+        type: isResultCol ? 'number' : paramType,
+        unit: isResultCol ? "" : unit,
         cellRef,
         colLetter: col.letter,
         colName: col.header,
         rowIndex: rowIdx,
+        isResult: isResultCol,
       };
 
       params.push(param);
       col.params.push(param);
-    }
-  }
-
-  // Détecter la formule
-  if (hasFormulaRow) {
-    const formulaCell = lastRow.find(cell => cell.startsWith("="));
-    if (formulaCell) formulaRaw = formulaCell;
-
-    // Extraire le nom du résultat depuis la première colonne de la ligne de formule
-    const firstCell = lastRow[0]?.trim();
-    if (firstCell && !firstCell.startsWith("=")) {
-      resultLabel = firstCell;
     }
   }
 
@@ -184,6 +169,7 @@ interface SimParam {
   colLetter: string;
   colName: string;
   rowIndex: number;
+  isResult?: boolean;
 }
 
 interface SimColumn {
@@ -413,29 +399,39 @@ export async function downloadFormulaAsExcel(
   sheet2.getCell("A2").fill = { type: "pattern", pattern: "solid", fgColor: { argb: YELLOW } };
   sheet2.getRow(2).height = 4;
 
-  let nextRow = 4;
+  // ── Sous-titre : description de la demande
+  sheet2.mergeCells("A3:H3");
+  const sub = sheet2.getCell("A3");
+  sub.value = prompt;
+  sub.font = { name: "Segoe UI", size: 10, italic: false, color: { argb: SLATE_700 } };
+  sub.alignment = { vertical: "middle", horizontal: "left", wrapText: true };
+  sheet2.getRow(3).height = 24;
 
-  // ── Calcul du dataStartRow AVANT tout affichage
-  // Layout: row4=title, row5=formula, row6=instructions(+2), row8=simtitle(+1), row9=headers(+1) → dataStartRow=10
-  const simDataStartRow = 4 + 1 + 1 + 2 + 1 + 1; // = 10
+  let nextRow = 4;
 
   // ── Pré-extraction des paramètres de simulation
   let simParams: SimParam[] = [];
   let simColumns: SimColumn[] = [];
   let simFormulaRaw = formulaRaw;
   let zone1Formula = "";
-  let simResultLabel = "Résultat";
 
   if (tables.length > 0) {
-    const { params, columns, formulaRaw: extracted, resultLabel } = extractSimulationParams(tables[0]);
+    const { params, columns, formulaRaw: extracted } = extractSimulationParams(tables[0]);
     simParams = params;
     simColumns = columns;
     simFormulaRaw = extracted || formulaRaw;
-    simResultLabel = resultLabel;
 
     if (simParams.length > 0 && simFormulaRaw) {
       zone1Formula = postProcessFormula(simFormulaRaw, format);
     }
+  }
+
+  // ── Formule active pour les cellules de résultat (colonne verte)
+  const DATA_START_ROW = 10;
+  let activeFormula = "";
+  if (simFormulaRaw) {
+    activeFormula = convertToUsInvariant(simFormulaRaw, format);
+    activeFormula = postProcessFormula(activeFormula, "libreoffice-en");
   }
 
   // ── Section formule à copier-coller
@@ -548,19 +544,37 @@ export async function downloadFormulaAsExcel(
         const col = simColumns[c];
         const param = col.params[r];
         const cell = row.getCell(3 + c);
+        const isResult = param?.isResult;
 
-        cell.font = { name: "Segoe UI", size: 11, bold: true, color: { argb: SLATE_900 } };
-        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: LIGHT_YELLOW } };
+        if (isResult) {
+          cell.font = { name: "Segoe UI", size: 11, color: { argb: "FF166534" } };
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF0FDF4" } };
+          cell.border = {
+            top: { style: "thin", color: { argb: "FF16A34A" } },
+            bottom: { style: "thin", color: { argb: "FF16A34A" } },
+            left: { style: "thin", color: { argb: "FF16A34A" } },
+            right: { style: "thin", color: { argb: "FF16A34A" } },
+          };
+        } else {
+          cell.font = { name: "Segoe UI", size: 11, bold: true, color: { argb: SLATE_900 } };
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: LIGHT_YELLOW } };
+          cell.border = {
+            top: { style: "thin", color: { argb: GOLD_BORDER } },
+            bottom: { style: "thin", color: { argb: GOLD_BORDER } },
+            left: { style: "thin", color: { argb: GOLD_BORDER } },
+            right: { style: "thin", color: { argb: GOLD_BORDER } },
+          };
+        }
         cell.alignment = { horizontal: "right", vertical: "middle" };
-        cell.border = {
-          top: { style: "thin", color: { argb: GOLD_BORDER } },
-          bottom: { style: "thin", color: { argb: GOLD_BORDER } },
-          left: { style: "thin", color: { argb: GOLD_BORDER } },
-          right: { style: "thin", color: { argb: GOLD_BORDER } },
-        };
 
         if (param) {
-          if (param.type === "text") {
+          if (isResult && activeFormula) {
+            let rowFormula = activeFormula;
+            const cellRefRegex = new RegExp(`(?<!:)(\\b[A-Z]+)${DATA_START_ROW}\\b(?!:)`, 'g');
+            rowFormula = rowFormula.replace(cellRefRegex, (match, col) => `${col}${DATA_START_ROW + r}`);
+            cell.value = { formula: rowFormula.replace(/^=/, "") };
+            cell.numFmt = "#,##0.00";
+          } else if (param.type === "text") {
             cell.value = param.rawValue;
             cell.alignment = { horizontal: "left", vertical: "middle" };
           } else if (param.type === "date") {
@@ -589,42 +603,10 @@ export async function downloadFormulaAsExcel(
       nextRow++;
     }
 
-    // ── Ligne Résultat (formule active) avec bordure épaisse
-    const resultRowSim = sheet2.getRow(nextRow);
-    resultRowSim.height = 26;
-
-    const resLabel = resultRowSim.getCell(2);
-    resLabel.value = `→ ${simResultLabel}`;
-    resLabel.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: "FF166534" } };
-    resLabel.alignment = { vertical: "middle" };
-    resLabel.border = {
-      top: { style: "medium", color: { argb: GOLD_BORDER } },
-    };
-
-    // Formule (cellule verte active)
-    let activeFormula = convertToUsInvariant(simFormulaRaw, format);
-    activeFormula = postProcessFormula(activeFormula, "libreoffice-en");
-
-    const resCell = resultRowSim.getCell(3);
-    resCell.value = { formula: activeFormula.replace(/^=/, "") };
-    resCell.font = { name: "Consolas", size: 12, bold: true, color: { argb: "FF166534" } };
-    resCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF0FDF4" } };
-    const isTextFormula = /&\s*["']|["']\s*&|TEXTE\s*\(|TEXT\s*\(/i.test(activeFormula);
-    resCell.numFmt = isTextFormula ? "@" : "#,##0.00";
-    resCell.alignment = { horizontal: "right", vertical: "middle" };
-    resCell.border = {
-      top: { style: "medium", color: { argb: GOLD_BORDER } },
-      bottom: { style: "medium", color: { argb: "FF16A34A" } },
-      left: { style: "medium", color: { argb: "FF16A34A" } },
-      right: { style: "medium", color: { argb: "FF16A34A" } },
-    };
-
-    nextRow += 2;
-
     // ── Zone 3 : Instructions
     sheet2.mergeCells(`B${nextRow}:H${nextRow}`);
     const instrCellSim = sheet2.getCell(`B${nextRow}`);
-    instrCellSim.value = "💡  Modifiez les valeurs jaunes pour tester d'autres scénarios. La formule verte se recalcule automatiquement.";
+    instrCellSim.value = "💡  Modifiez les valeurs jaunes pour tester d'autres scénarios. Les résultats (colonne verte) se recalcule automatiquement.";
     instrCellSim.font = { name: "Segoe UI", size: 9, italic: true, color: { argb: SLATE_500 } };
     sheet2.getRow(nextRow).height = 18;
     nextRow++;
