@@ -19,6 +19,16 @@ export const FORMULA_EXAMPLES = [
   { label: "Convertir des minutes en heures et minutes (ex: 135 -> 2h15)", keywords: "texte" },
   { label: "Trouver le salaire maximum des employés du service Marketing", keywords: "maximum" },
   { label: "Créer une liste déroulante dynamique pour restreindre la saisie", keywords: "validation" },
+  { label: "Amortissement linéaire d'une immobilisation sur 5 ans", keywords: "amortissement" },
+  { label: "Extraire le mois et l'année d'une date de facture", keywords: "mois" },
+  { label: "Chercher le taux de commission selon un palier de CA", keywords: "commission" },
+  { label: "Calculer le salaire net (déduire 22% de charges du brut)", keywords: "salaire net" },
+  { label: "Compter le nombre de jours ouvrés entre deux dates", keywords: "jours ouvrés" },
+  { label: "Calculer un taux de marge commerciale en pourcentage", keywords: "marge" },
+  { label: "Déterminer le seuil de rentabilité (point mort en jours)", keywords: "point mort" },
+  { label: "Calcul du coût total d'un crédit avec assurance", keywords: "crédit" },
+  { label: "Calculer la VNC après 3 ans d'amortissement", keywords: "vnc" },
+  { label: "Répartir un budget annuel au prorata des jours du mois", keywords: "prorata" },
 ];
 
 function normalizeMarkdownBlocks(markdown: string) {

@@ -92,6 +92,7 @@ STRUCTURE DE RÉPONSE (respecter cet ordre) :
    - Première colonne = "Ligne" avec labels ("Ligne 1", "Ligne 2", ...)
    - Colonnes suivantes = paramètres d'entrée avec en-têtes descriptifs (ex: "Capital", "Taux annuel", "Durée")
    - La DERNIÈRE colonne contient le RÉSULTAT ATTENDU calculé pour cette ligne. Son en-tête décrit le résultat (ex: "Mensualité", "Total TVA", "Prime", "Salaire max")
+   - TRÈS IMPORTANT : SI vous utilisez une table de référence (pour RECHERCHEV, INDEX/EQUIV), ces colonnes de référence DOIVENT se trouver AVANT la dernière colonne (colonne de résultat). Ne placez RIEN après la colonne de résultat.
    - Chaque ligne de données doit avoir TOUTES ses colonnes remplies, y compris la dernière colonne avec le résultat attendu
    - NE PAS inclure de ligne séparée pour le résultat en bas du tableau. PAS de ligne "→ Résultat" ou "→ Mensualité" à la fin
    - Les refs cellule dans la formule utilisent l'ordre alphabétique (C, D, E, F, G...) pour chaque colonne de données (de gauche à droite) :
