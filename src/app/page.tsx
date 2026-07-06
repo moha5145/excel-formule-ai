@@ -336,7 +336,7 @@ export default function Home() {
 
         {/* Scrollable body */}
         <div ref={scrollAreaRef} className="flex-1 overflow-y-auto results-scroll flex flex-col bg-transparent">
-          <div className={`flex-1 flex flex-col px-4 md:px-6 py-6 md:py-10 max-w-4xl w-full mx-auto ${!response && !loading ? "justify-center" : "justify-start"}`}>
+          <div className={`flex-1 flex flex-col px-6 py-6 md:py-10 max-w-4xl w-full mx-auto ${!response && !loading ? "justify-center" : "justify-start"}`}>
             {!response && !loading ? (
               <div className="w-full flex flex-col items-center">
                 {/* Hero text */}

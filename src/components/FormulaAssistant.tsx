@@ -332,7 +332,7 @@ export function FormulaResultArea({
   }, [response]);
 
   return (
-    <div className="w-full max-w-3xl mx-auto flex flex-col gap-6 p-4 md:p-6 animate-in fade-in duration-500">
+    <div className="w-full max-w-4xl mx-auto flex flex-col gap-6 py-6 md:py-10 animate-in fade-in duration-500">
       {/* Skeleton Loading State */}
       {loading && !response && (
         <div className="bg-slate-900/60 backdrop-blur-xl rounded-3xl border border-slate-800/80 p-8 shadow-xl flex flex-col gap-4 animate-in fade-in duration-300">
@@ -351,7 +351,7 @@ export function FormulaResultArea({
       {response && (
         <div
           ref={resultRef}
-          className="bg-slate-900/80 backdrop-blur-xl rounded-3xl border border-primary/20 p-6 md:p-8 shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95 duration-500"
+          className="bg-slate-900/80 backdrop-blur-xl rounded-3xl border border-primary/20 py-6 md:py-8 px-2.5 shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95 duration-500"
         >
           <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-primary to-transparent opacity-70" />
 
