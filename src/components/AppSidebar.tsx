@@ -1,9 +1,20 @@
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Key, HelpCircle, History, Trash2, ChevronLeft, ChevronRight, Coffee, LogOut, X } from "lucide-react";
+import { Key, HelpCircle, History, Trash2, ChevronLeft, ChevronRight, Coffee, LogOut, X, AlertTriangle } from "lucide-react";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { toast } from "sonner";
+import {
+  Dialog,
+  DialogPortal,
+  DialogOverlay,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 interface HistoryItem {
   id: string;
@@ -32,6 +43,7 @@ export function AppSidebar({
   const [mounted, setMounted] = useState(false);
   useEffect(() => { const id = setTimeout(() => setMounted(true), 0); return () => clearTimeout(id); }, []);
   const [collapsed, setCollapsed] = useState(false);
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const isCollapsed = isMobileDrawer ? false : collapsed;
 
   // Use state from props if passed, otherwise use local hook state
@@ -40,8 +52,18 @@ export function AppSidebar({
   const setHistory = propsSetHistory !== undefined ? propsSetHistory : setLocalHistory;
 
   const handleClearHistory = () => {
+    const previousHistory = history;
     setHistory([]);
-    toast.success("Historique effacé.");
+    setClearConfirmOpen(false);
+    toast("Historique effacé.", {
+      action: {
+        label: "Annuler",
+        onClick: () => {
+          setHistory(previousHistory);
+        },
+      },
+      duration: 5000,
+    });
   };
 
   const handleDeleteItem = (id: string) => {
@@ -132,7 +154,7 @@ export function AppSidebar({
               </p>
               {history.length > 0 && (
                 <button
-                  onClick={handleClearHistory}
+                  onClick={() => setClearConfirmOpen(true)}
                   title="Effacer l'historique"
                   className="text-slate-600 hover:text-red-400 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded p-0.5"
                   aria-label="Effacer tout l'historique"
@@ -241,6 +263,35 @@ export function AppSidebar({
           </Link>
         </div>
       </div>
+      {/* ── Modal de confirmation ────────────────── */}
+      <Dialog open={clearConfirmOpen} onOpenChange={setClearConfirmOpen}>
+        <DialogPortal>
+          <DialogOverlay />
+          <DialogContent showCloseButton={false}>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-red-400">
+                <AlertTriangle size={18} />
+                Effacer tout l'historique ?
+              </DialogTitle>
+              <DialogDescription>
+                Cette action supprime l&apos;intégralité de vos requêtes sauvegardées. 
+                Vous pourrez annuler cette action pendant 5 secondes après confirmation.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setClearConfirmOpen(false)}>Annuler</Button>
+              <Button
+                variant="destructive"
+                onClick={handleClearHistory}
+                className="bg-red-600 hover:bg-red-500 text-white"
+              >
+                <Trash2 size={14} className="mr-1.5" />
+                Tout effacer
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </DialogPortal>
+      </Dialog>
     </aside>
   );
 }
