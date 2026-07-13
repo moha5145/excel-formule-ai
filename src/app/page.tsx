@@ -23,7 +23,7 @@ export default function Home() {
   const [apiKey, setApiKey] = useLocalStorage<string | null>("gemini_api_key", null);
   const [modelChoice, setModelChoice] = useLocalStorage<"flash" | "pro">("excel_compta_model", "flash");
   const [exportFormat, setExportFormat] = useLocalStorage<ExportFormat>("excel_export_format", "libreoffice-fr");
-  const [dailyFreeRemaining, setDailyFreeRemaining] = useState<number | null>(5);
+  const [dailyFreeRemaining, setDailyFreeRemaining] = useState<number | null>(3);
   const [isKeyModalOpen, setIsKeyModalOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -62,7 +62,7 @@ export default function Home() {
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
-  // Fetch real daily free remaining on mount (not just default 5)
+  // Fetch real daily free remaining on mount (not just default 3)
   useEffect(() => {
     if (apiKey) return; // no need to check for users with own key
     fetch("/api/quota")

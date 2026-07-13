@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { DM_Sans, Calistoga } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
+import { Analytics } from "@vercel/analytics/react";
 
 const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-sans" });
 const calistoga = Calistoga({ weight: "400", subsets: ["latin"], variable: "--font-display" });
@@ -42,6 +43,7 @@ export default function RootLayout({
       <body className="min-h-screen bg-background text-foreground antialiased font-sans" suppressHydrationWarning>
         {children}
         <Toaster />
+        <Analytics />
       </body>
     </html>
   );

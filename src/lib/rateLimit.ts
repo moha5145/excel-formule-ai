@@ -61,18 +61,18 @@ export function rateLimit(
 const dailyTracker = new Map<string, { count: number; date: string }>();
 
 /**
- * Compteur quotidien gratuit par IP (5 requêtes/jour).
+ * Compteur quotidien gratuit par IP (3 requêtes/jour).
  * Le compteur reset à minuit UTC automatiquement (date change).
  *
  * ⚠️ Map en mémoire → perdu si toutes les instances Vercel redémarrent.
  *    Pour de la persistance réelle, migrer vers Vercel KV.
  *
  * @param ip Client IP address
- * @param maxPerDay Nombre max de requêtes gratuites par jour (défaut: 5)
+ * @param maxPerDay Nombre max de requêtes gratuites par jour (défaut: 3)
  */
 export function dailyFreeLimit(
   ip: string,
-  maxPerDay: number = 5
+  maxPerDay: number = 3
 ): { allowed: boolean; remaining: number } {
   const today = new Date().toISOString().slice(0, 10);
 
@@ -104,7 +104,7 @@ export function dailyFreeLimit(
  */
 export function getDailyFreeRemaining(
   ip: string,
-  maxPerDay: number = 5
+  maxPerDay: number = 3
 ): { remaining: number } {
   const today = new Date().toISOString().slice(0, 10);
   const entry = dailyTracker.get(ip);

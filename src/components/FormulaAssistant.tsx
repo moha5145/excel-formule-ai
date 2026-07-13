@@ -257,7 +257,7 @@ export function FormulaInputBar({
               )}
               {!apiKey && dailyFreeRemaining !== null && dailyFreeRemaining !== undefined && (dailyFreeRemaining > 0 ? (
                 <span className="text-[10px] font-medium px-1.5 sm:px-2 py-1 rounded-md text-green-400 bg-green-950/20 border border-green-900/30 flex-shrink-0">
-                  {dailyFreeRemaining}/5 <span className="hidden sm:inline">aujourd&apos;hui</span>
+                  {dailyFreeRemaining}/3 <span className="hidden sm:inline">aujourd&apos;hui</span>
                 </span>
               ) : (
                 <button
