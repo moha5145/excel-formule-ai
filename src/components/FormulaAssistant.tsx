@@ -1,7 +1,7 @@
 "use client";
 import { useRef, useEffect, useState, useCallback, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { Loader2, Copy, Check, Sparkles, Wand2, Undo2, Zap, Brain, Key, Download, FileSpreadsheet, FileType } from "lucide-react";
+import { Loader2, Copy, Check, Sparkles, Wand2, Undo2, Zap, Brain, Key, Download, FileSpreadsheet, FileType, RefreshCw } from "lucide-react";
 import type { ExportFormat } from "@/lib/excelExport";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -305,6 +305,7 @@ interface FormulaResultAreaProps {
   onCopy: () => void;
   onDownload: () => void;
   onDownloadExcel: () => void;
+  onRegenerate: () => void;
 }
 
 export function FormulaResultArea({
@@ -314,6 +315,7 @@ export function FormulaResultArea({
   onCopy,
   onDownload,
   onDownloadExcel,
+  onRegenerate,
 }: FormulaResultAreaProps) {
   const resultRef = useRef<HTMLDivElement>(null);
   const [formulaCopied, setFormulaCopied] = useState(false);
@@ -400,6 +402,15 @@ export function FormulaResultArea({
           </div>
 
           <div className="flex flex-wrap sm:flex-nowrap gap-2 w-full mt-6">
+            <Button
+              variant="outline"
+              onClick={onRegenerate}
+              disabled={loading}
+              className="flex-1 min-w-[120px] border-primary/30 bg-primary/5 hover:bg-primary/15 hover:border-primary/50 active:scale-95 text-primary rounded-xl transition-all h-9 px-3 text-xs cursor-pointer focus-visible:outline-none"
+              title="Régénérer avec le même prompt"
+            >
+              <RefreshCw size={14} className={`mr-1.5 ${loading ? "animate-spin" : ""}`} /> Régénérer
+            </Button>
             <Button
               variant="outline"
               onClick={onCopy}

@@ -362,6 +362,7 @@ export default function Home() {
                 onCopy={handleCopy}
                 onDownload={handleDownload}
                 onDownloadExcel={handleDownloadExcel}
+                onRegenerate={handleGenerate}
               />
             )}
           </div>
