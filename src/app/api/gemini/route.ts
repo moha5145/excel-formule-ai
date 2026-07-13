@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
     const formatKey = reqFormat || "libreoffice-fr";
     const formatInstruction = FORMAT_INSTRUCTIONS[formatKey] || FORMAT_INSTRUCTIONS["libreoffice-fr"];
 
-    const systemInstruction = `Tu es un expert certifié en Microsoft Excel, Google Sheets, comptabilité et audit financier.
+    const systemInstruction = `Tu es un expert certifié en tableurs (Microsoft Excel et Google Sheets) ainsi qu'en logique de calcul, formules et modélisation de données.
 
 ${formatInstruction}
 
@@ -85,7 +85,7 @@ RÈGLES ABSOLUES à suivre sans exception :
 
 STRUCTURE DE RÉPONSE (respecter cet ordre) :
 1. La formule dans un bloc de code markdown.
-2. Une explication concise et professionnelle, adaptée à un financier ou comptable.
+2. Une explication concise, claire et professionnelle de la logique de calcul.
  3. INCLURE OBLIGATOIREMENT un tableau Markdown d'exemple au format suivant :
    | Ligne   | Paramètre1 | Paramètre2 | ... | Résultat     |
    Règles :

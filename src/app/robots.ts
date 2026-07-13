@@ -9,6 +9,6 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ["/api/"],
       },
     ],
-    sitemap: "https://excel-compta-ai.vercel.app/sitemap.xml",
+    sitemap: "https://excel-formule-ai.vercel.app/sitemap.xml",
   };
 }

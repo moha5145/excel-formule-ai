@@ -2,8 +2,8 @@ import Link from "next/link";
 import { ArrowLeft, ShieldCheck, HelpCircle, HardDrive, RefreshCw } from "lucide-react";
 
 export const metadata = {
-  title: "À propos — Excel-Compta AI",
-  description: "Foire aux questions, sécurité des données et confidentialité sur Excel-Compta AI.",
+  title: "À propos — Excel-Formule AI",
+  description: "Foire aux questions, sécurité des données et confidentialité sur Excel-Formule AI.",
 };
 
 export default function AboutPage() {
@@ -21,7 +21,7 @@ export default function AboutPage() {
               ∑
             </div>
             <h1 className="text-lg font-display text-white tracking-tight">
-              Excel-Compta <span className="text-primary font-sans font-medium">AI</span>
+              Excel-Formule <span className="text-primary font-sans font-medium">AI</span>
             </h1>
           </div>
           <Link
@@ -42,7 +42,7 @@ export default function AboutPage() {
             À propos &amp; Confidentialité
           </h2>
           <p className="text-slate-400 text-sm md:text-base leading-relaxed max-w-2xl">
-            Découvrez comment Excel-Compta AI simplifie vos calculs comptables et financiers tout en protégeant vos données sensibles.
+            Découvrez comment Excel-Formule AI simplifie vos calculs sur tableur tout en protégeant vos données.
           </p>
         </div>
 
@@ -90,7 +90,7 @@ export default function AboutPage() {
             <div className="border-b border-slate-800/60 pb-6">
               <h4 className="text-white font-medium text-base mb-2">Comment fonctionne le mode Démo gratuit ?</h4>
               <p className="text-slate-400 text-sm leading-relaxed">
-                Le mode Démo gratuit utilise une base de données locale intelligente pour reconnaître les requêtes les plus courantes des comptables (TVA, SOMME.SI, RECHERCHEX, etc.) sans nécessiter de clé API. Il permet de tester l&apos;ergonomie de l&apos;application immédiatement.
+                Le mode Démo gratuit utilise une base de données locale intelligente pour reconnaître les requêtes les plus courantes (TVA, SOMME.SI, RECHERCHEX, etc.) sans nécessiter de clé API. Il permet de tester l&apos;ergonomie de l&apos;application immédiatement.
               </p>
             </div>
 
@@ -102,9 +102,9 @@ export default function AboutPage() {
             </div>
 
             <div className="border-b border-slate-800/60 pb-6">
-              <h4 className="text-white font-medium text-base mb-2">Mes données comptables sont-elles partagées ?</h4>
+              <h4 className="text-white font-medium text-base mb-2">Mes données sont-elles partagées ?</h4>
               <p className="text-slate-400 text-sm leading-relaxed">
-                Non. Les requêtes saisies pour générer des formules transitent de manière sécurisée et chiffrée vers l&apos;API officielle de Google Gemini. L&apos;application elle-même ne collecte aucune donnée personnelle ou financière.
+                Non. Les requêtes saisies pour générer des formules transitent de manière sécurisée et chiffrée vers l&apos;API officielle de Google Gemini. L&apos;application elle-même ne collecte aucune donnée personnelle.
               </p>
             </div>
 
@@ -120,7 +120,7 @@ export default function AboutPage() {
         {/* GDPR statement */}
         <div className="flex flex-col md:flex-row items-center justify-between gap-6 p-6 rounded-2xl bg-slate-900/40 border border-slate-800 text-xs text-slate-500">
           <span>
-            © {new Date().getFullYear()} Excel-Compta AI. Conforme au RGPD. Hébergement sécurisé en Europe.
+            © {new Date().getFullYear()} Excel-Formule AI. Conforme au RGPD. Hébergement sécurisé en Europe.
           </span>
           <div className="flex gap-4">
             <a href="https://aistudio.google.com/support" target="_blank" rel="noreferrer" className="hover:text-slate-300 transition-colors">Support Google AI Studio</a>

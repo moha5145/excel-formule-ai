@@ -41,7 +41,7 @@ export default function Home() {
     if (currentCount === 3 || currentCount === 8 || (currentCount > 8 && (currentCount - 8) % 8 === 0)) {
       setTimeout(() => {
         toast("☕ Soutenir le projet ?", {
-          description: "Si Excel-Compta AI vous fait gagner du temps, offrez-moi un café pour soutenir le site !",
+          description: "Si Excel-Formule AI vous fait gagner du temps, offrez-moi un café pour soutenir le site !",
           action: {
             label: "Offrir un café",
             onClick: () => window.open(process.env.NEXT_PUBLIC_SUPPORT_URL || "https://buymeacoffee.com/", "_blank"),
@@ -114,7 +114,7 @@ export default function Home() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `formule-excel-compta-ai-${Date.now()}.txt`;
+    a.download = `formule-excel-formule-ai-${Date.now()}.txt`;
     a.click();
     URL.revokeObjectURL(url);
     toast.success("Fichier de formule téléchargé !");
@@ -302,7 +302,7 @@ export default function Home() {
                 ∑
               </div>
               <h1 className="text-base sm:text-xl font-display text-white tracking-tight">
-                Excel-Compta <span className="text-primary font-sans font-medium">AI</span>
+                Excel-Formule <span className="text-primary font-sans font-medium">AI</span>
               </h1>
             </div>
             

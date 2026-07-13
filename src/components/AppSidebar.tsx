@@ -89,7 +89,7 @@ export function AppSidebar({
 
   return (
     <aside
-          className={isMobileDrawer
+      className={isMobileDrawer
         ? "relative w-full h-full flex flex-col bg-transparent"
         : `relative flex-shrink-0 flex flex-col transition-all duration-300 ease-in-out
           ${isCollapsed ? "w-14" : "w-72"}
@@ -234,13 +234,13 @@ export function AppSidebar({
           ) : (
             <div className="bg-gradient-to-br from-yellow-950/20 to-slate-900 border border-yellow-800/20 p-3.5 rounded-2xl flex flex-col gap-2 shadow-[0_0_20px_-6px_rgba(250,204,21,0.1)] relative overflow-hidden group">
               <div className="absolute -right-6 -bottom-6 w-16 h-16 bg-yellow-500/10 rounded-full blur-xl group-hover:bg-yellow-500/20 transition-all duration-300" />
-              
+
               <div className="flex items-center gap-2 text-yellow-400 font-semibold text-xs tracking-tight">
                 <Coffee size={14} className="group-hover:rotate-12 transition-transform duration-300" />
                 <span>Soutenir le projet</span>
               </div>
               <p className="text-[10px] text-slate-400 leading-normal">
-                Excel-Compta AI est gratuit et sans serveurs. Offrez-moi un café pour soutenir le projet !
+                Excel-Formule AI est gratuit et sans serveurs. Offrez-moi un café pour soutenir le projet !
               </p>
               <a
                 href={process.env.NEXT_PUBLIC_SUPPORT_URL || "https://buymeacoffee.com/"}
@@ -274,7 +274,7 @@ export function AppSidebar({
                 Effacer tout l'historique ?
               </DialogTitle>
               <DialogDescription>
-                Cette action supprime l&apos;intégralité de vos requêtes sauvegardées. 
+                Cette action supprime l&apos;intégralité de vos requêtes sauvegardées.
                 Vous pourrez annuler cette action pendant 5 secondes après confirmation.
               </DialogDescription>
             </DialogHeader>

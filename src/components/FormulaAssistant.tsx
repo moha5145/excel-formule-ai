@@ -397,7 +397,7 @@ export function FormulaResultArea({
             <span className="text-yellow-500 text-sm sm:text-base flex-shrink-0">⚠️</span>
             <p className="text-[10px] sm:text-[11px] text-slate-400 leading-relaxed">
               <span className="text-slate-300 font-medium">Vérifiez avant d&apos;utiliser en production.</span>{" "}
-              Les formules générées par IA peuvent contenir des erreurs. Testez toujours sur un jeu de données réel avant de l&apos;intégrer à vos fichiers comptables officiels.
+              Les formules générées par IA peuvent contenir des erreurs. Testez toujours sur un jeu de données réel avant de l&apos;intégrer à vos fichiers officiels.
             </p>
           </div>
 

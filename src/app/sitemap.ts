@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const base = "https://excel-compta-ai.vercel.app";
+  const base = "https://excel-formule-ai.vercel.app";
 
   return [
     { url: base, lastModified: new Date(), changeFrequency: "weekly", priority: 1.0 },

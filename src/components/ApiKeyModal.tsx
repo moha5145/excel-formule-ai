@@ -18,7 +18,7 @@ export function ApiKeyModal({ open, onOpenChange, onKeySaved }: { open: boolean,
     <Dialog open={open} onOpenChange={(next) => { if (next) setKeyInput(""); onOpenChange(next); }}>
       <DialogContent className="sm:max-w-lg p-6 md:p-8 bg-slate-900/95 border border-slate-800/80 shadow-2xl rounded-2xl backdrop-blur-xl">
         <DialogTitle className="sr-only">Configuration de la clé API</DialogTitle>
-        
+
         {/* Header decoration */}
         <div className="relative mb-6 text-center">
           <div className="mx-auto w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-yellow-600 flex items-center justify-center text-white shadow-lg shadow-primary/20 mb-4 animate-pulse">
@@ -36,18 +36,18 @@ export function ApiKeyModal({ open, onOpenChange, onKeySaved }: { open: boolean,
             <label className="text-xs font-semibold text-slate-400 tracking-wider uppercase flex items-center gap-1.5">
               Votre clé API Gemini
             </label>
-            <Input 
-              type="password" 
-              placeholder="AIzaSy..." 
-              value={keyInput} 
-              onChange={(e) => setKeyInput(e.target.value)} 
+            <Input
+              type="password"
+              placeholder="AIzaSy..."
+              value={keyInput}
+              onChange={(e) => setKeyInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSave()}
               className="bg-slate-900 border-slate-800 focus:border-primary/50 text-white h-12 rounded-xl focus:ring-1 focus:ring-primary/30"
             />
           </div>
-          
-          <Button 
-            onClick={handleSave} 
+
+          <Button
+            onClick={handleSave}
             disabled={!keyInput.trim()}
             className="bg-primary hover:bg-yellow-600 text-white w-full h-12 font-medium rounded-xl transition-all shadow-lg hover:shadow-primary/25 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
@@ -77,9 +77,9 @@ export function ApiKeyModal({ open, onOpenChange, onKeySaved }: { open: boolean,
               </div>
               <div className="text-xs text-slate-400">
                 Rendez-vous sur{" "}
-                <a 
-                  href="https://aistudio.google.com/app/apikey" 
-                  target="_blank" 
+                <a
+                  href="https://aistudio.google.com/app/apikey"
+                  target="_blank"
                   rel="noopener noreferrer"
                   className="text-primary hover:text-yellow-400 underline inline-flex items-center gap-1 font-semibold transition-colors"
                 >
@@ -113,7 +113,7 @@ export function ApiKeyModal({ open, onOpenChange, onKeySaved }: { open: boolean,
           <div className="mt-4 flex items-start gap-2 bg-slate-950/20 p-2.5 rounded-xl border border-slate-800/40 text-[10px] text-slate-500 leading-relaxed">
             <AlertCircle size={12} className="text-slate-400 flex-shrink-0 mt-0.5" />
             <span>
-              Google offre un quota gratuit généreux (jusqu'à 15 requêtes/minute), ce qui est largement suffisant pour une utilisation quotidienne classique d'Excel-Compta AI.
+              Google offre un quota gratuit généreux (jusqu'à 15 requêtes/minute), ce qui est largement suffisant pour une utilisation quotidienne classique d'Excel-Formule AI.
             </span>
           </div>
         </div>

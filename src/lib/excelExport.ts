@@ -273,7 +273,7 @@ export async function downloadFormulaAsExcel(
   format: ExportFormat = "libreoffice-fr"
 ): Promise<void> {
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "Excel-Compta AI";
+  workbook.creator = "Excel-Formule AI";
   workbook.created = new Date();
   workbook.modified = new Date();
   workbook.calcProperties.fullCalcOnLoad = true;
@@ -305,7 +305,7 @@ export async function downloadFormulaAsExcel(
   // ── Titre
   sheet1.mergeCells("A1:H1");
   const t1 = sheet1.getCell("A1");
-  t1.value = "EXCEL-COMPTA AI — FORMULE COMPTABLE";
+  t1.value = "EXCEL-FORMULE AI — EXEMPLE DE FORMULE";
   t1.font = { name: "Segoe UI", size: 16, bold: true, color: { argb: WHITE } };
   t1.fill = { type: "pattern", pattern: "solid", fgColor: { argb: SLATE_900 } };
   t1.alignment = { vertical: "middle", horizontal: "center" };
