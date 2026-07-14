@@ -1,22 +1,54 @@
 "use client";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, type ReactNode } from "react";
 import { toast } from "sonner";
 import { ApiKeyModal } from "@/components/ApiKeyModal";
-import { 
-  FormulaInputBar, 
-  FormulaResultArea
-} from "@/components/FormulaAssistant";
+import { FormulaInputBar } from "@/components/FormulaAssistant";
 import { AppSidebar } from "@/components/AppSidebar";
-import { Menu } from "lucide-react";
+import { Menu, Copy } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { downloadFormulaAsExcel } from "@/lib/excelExport";
 import type { ExportFormat } from "@/lib/excelExport";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+
+function normalizeMarkdownBlocks(markdown: string) {
+  const lines = markdown.replace(/\r\n/g, "\n").split("\n");
+  const output: string[] = [];
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    const isFence = /^\s*```/.test(line);
+
+    if (isFence) {
+      const previousLine = output[output.length - 1];
+      if (previousLine !== undefined && previousLine.trim() !== "") {
+        output.push("");
+      }
+
+      output.push(line);
+
+      const nextLine = lines[i + 1];
+      if (nextLine !== undefined && nextLine.trim() !== "" && !/^\s*```/.test(nextLine)) {
+        output.push("");
+      }
+    } else {
+      output.push(line);
+    }
+  }
+
+  return output.join("\n");
+}
+
+interface Message {
+  role: "user" | "model";
+  content: string;
+}
 
 interface HistoryItem {
   id: string;
   prompt: string;
   response: string;
+  messages?: Message[];
 }
 
 export default function Home() {
@@ -31,11 +63,9 @@ export default function Home() {
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
   const [enhancing, setEnhancing] = useState(false);
-  const [response, setResponse] = useState("");
-  const [copied, setCopied] = useState(false);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [previousPrompt, setPreviousPrompt] = useState("");
   const [history, setHistory] = useLocalStorage<HistoryItem[]>("excel_compta_history", []);
-  const [actionCount, setActionCount] = useLocalStorage<number>("excel_compta_action_count", 0);
 
   const checkCoffeeToast = useCallback((currentCount: number) => {
     if (currentCount === 3 || currentCount === 8 || (currentCount > 8 && (currentCount - 8) % 8 === 0)) {
@@ -51,14 +81,6 @@ export default function Home() {
       }, 1000);
     }
   }, []);
-
-  const handleActionComplete = useCallback(() => {
-    setActionCount((prev) => {
-      const next = typeof prev === "number" ? prev + 1 : 1;
-      checkCoffeeToast(next);
-      return next;
-    });
-  }, [setActionCount, checkCoffeeToast]);
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
@@ -77,8 +99,16 @@ export default function Home() {
 
   // Restore item from history
   const handleRestoreItem = useCallback((item: HistoryItem) => {
-    setPrompt(item.prompt);
-    setResponse(item.response);
+    setPrompt("");
+    if (item.messages && item.messages.length > 0) {
+      setMessages(item.messages);
+    } else {
+      const restored = [
+        { role: "user" as const, content: item.prompt },
+        { role: "model" as const, content: item.response }
+      ];
+      setMessages(restored);
+    }
   }, []);
 
   // Migrate legacy history items that lack an id
@@ -94,45 +124,6 @@ export default function Home() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [history.length]);
-
-  // Copy result
-  const handleCopy = useCallback(() => {
-    if (!response) return;
-    const formulaMatch = response.match(/```(?:excel)?\n?([\s\S]*?)\n?```/);
-    const textToCopy = formulaMatch ? formulaMatch[1].trim() : response;
-    navigator.clipboard.writeText(textToCopy);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-    toast.success("Formule copiée dans le presse-papier !");
-    handleActionComplete();
-  }, [response, handleActionComplete]);
-
-  // Download result
-  const handleDownload = useCallback(() => {
-    if (!response) return;
-    const blob = new Blob([response], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `formule-excel-formule-ai-${Date.now()}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success("Fichier de formule téléchargé !");
-    handleActionComplete();
-  }, [response, handleActionComplete]);
-
-  // Download Excel example
-  const handleDownloadExcel = useCallback(async () => {
-    if (!response) return;
-    try {
-      await downloadFormulaAsExcel(response, prompt, exportFormat);
-      toast.success("Fichier Excel téléchargé !");
-      handleActionComplete();
-    } catch (err: unknown) {
-      console.error(err);
-      toast.error("Erreur lors de la génération du fichier Excel.");
-    }
-  }, [response, prompt, handleActionComplete]);
 
   // Enhance prompt
   const handleEnhance = useCallback(async () => {
@@ -181,12 +172,23 @@ export default function Home() {
     }
 
     setLoading(true);
-    setResponse("");
+
+    // Add user message to conversation immediately
+    const newUserMessage = { role: "user" as const, content: prompt };
+    setMessages((prev) => [...prev, newUserMessage]);
+
+    // Clear input after sending
+    setPrompt("");
+
+    // Build messages to send (current messages + new user message)
+    const messagesToSend = [...messages, newUserMessage];
+
     try {
+
       const res = await fetch("/api/gemini", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, modelChoice, format: exportFormat, ...(apiKey ? { apiKey } : {}) }),
+        body: JSON.stringify({ messages: messagesToSend, modelChoice, format: exportFormat, ...(apiKey ? { apiKey } : {}) }),
       });
 
       const freeRemainingHeader = res.headers.get("X-Free-Remaining");
@@ -226,19 +228,23 @@ export default function Home() {
         if (done) break;
         const chunk = decoder.decode(value, { stream: true });
         streamResponse += chunk;
-        setResponse(streamResponse);
       }
 
-      setHistory((prev) => {
-        const filtered = prev.filter((item) => item.prompt !== prompt);
-        return [{ id: crypto.randomUUID(), prompt, response: streamResponse }, ...filtered].slice(0, 10);
+      // Add model response to conversation history
+      setMessages((prev) => {
+        const updated = [...prev, { role: "model" as const, content: streamResponse }];
+        setHistory((historyPrev) => {
+          const filtered = historyPrev.filter((item) => item.prompt !== prompt);
+          return [{ id: crypto.randomUUID(), prompt, response: streamResponse, messages: updated }, ...filtered].slice(0, 10);
+        });
+        return updated;
       });
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Une erreur est survenue.");
     } finally {
       setLoading(false);
     }
-  }, [prompt, apiKey, modelChoice, dailyFreeRemaining, loading, setHistory]);
+  }, [prompt, apiKey, modelChoice, dailyFreeRemaining, loading, setHistory, messages]);
 
   // Keyboard Shortcuts (Ctrl+Enter / Cmd+Enter to generate, Ctrl+Shift+E / Cmd+Shift+E to enhance)
   useEffect(() => {
@@ -261,7 +267,7 @@ export default function Home() {
     if (loading && scrollAreaRef.current) {
       scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
     }
-  }, [response, loading]);
+  }, [loading]);
 
   return (
     <div className="h-[100dvh] w-screen flex flex-row relative overflow-hidden bg-slate-950">
@@ -289,6 +295,7 @@ export default function Home() {
           onRestoreHistory={handleRestoreItem}
           history={history}
           setHistory={setHistory}
+          dailyFreeRemaining={dailyFreeRemaining}
         />
       </div>
 
@@ -327,6 +334,7 @@ export default function Home() {
                     history={history}
                     setHistory={setHistory}
                     isMobileDrawer={true}
+                    dailyFreeRemaining={dailyFreeRemaining}
                   />
                 </SheetContent>
               </Sheet>
@@ -336,8 +344,8 @@ export default function Home() {
 
         {/* Scrollable body */}
         <div ref={scrollAreaRef} className="flex-1 overflow-y-auto results-scroll flex flex-col bg-transparent">
-          <div className={`flex-1 flex flex-col px-3 py-4 sm:px-6 sm:py-6 md:py-10 w-full mx-auto ${!response && !loading ? "max-w-4xl justify-center" : "justify-start"}`}>
-            {!response && !loading ? (
+          <div className={`flex-1 flex flex-col px-3 py-4 sm:px-6 sm:py-6 md:py-10 w-full mx-auto ${messages.length === 0 && !loading ? "max-w-4xl justify-center" : "justify-start"}`}>
+            {!loading && messages.length === 0 ? (
               <div className="w-full flex flex-col items-center">
                 {/* Hero text */}
                 <div className="text-center mb-6 animate-in fade-in slide-in-from-bottom-6 duration-700">
@@ -355,15 +363,53 @@ export default function Home() {
                 {/* Examples moved to FormulaInputBar */}
               </div>
             ) : (
-              <FormulaResultArea
-                response={response}
-                loading={loading}
-                copied={copied}
-                onCopy={handleCopy}
-                onDownload={handleDownload}
-                onDownloadExcel={handleDownloadExcel}
-                onRegenerate={handleGenerate}
-              />
+              <div className="w-full max-w-4xl mx-auto flex flex-col gap-4">
+                {messages.map((msg, idx) => (
+                  <div key={idx} className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}>
+                    <div className={`max-w-[85%] px-4 py-3 rounded-2xl ${
+                      msg.role === "user"
+                        ? "bg-primary/20 border border-primary/30 text-white text-sm"
+                        : "bg-slate-800/80 border border-slate-700/50 text-slate-300 text-sm prose prose-invert prose-p:text-slate-300 prose-a:text-primary hover:prose-a:text-yellow-400 prose-strong:text-white prose-li:text-slate-300 max-w-none"
+                    }`}>
+                      {msg.role === "model" ? (
+                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+                          pre({ children, className }: { children?: ReactNode; className?: string }) {
+                            return (
+                              <pre className={`relative p-3 my-2 overflow-x-auto bg-slate-900/85 border border-slate-800/80 rounded-xl text-yellow-300 font-mono text-xs shadow-inner ${className || ""}`}>
+                                <button
+                                  onClick={() => navigator.clipboard.writeText(String(children))}
+                                  className="absolute top-2 right-2 p-1.5 rounded-lg bg-slate-800/80 border border-slate-700/50 text-slate-400 hover:text-yellow-300 hover:bg-slate-700/80 transition-all"
+                                  aria-label="Copier la formule"
+                                >
+                                  <Copy size={12} />
+                                </button>
+                                {children}
+                              </pre>
+                            );
+                          },
+                          code({ inline, className, children }: { inline?: boolean; className?: string; children?: ReactNode }) {
+                            if (inline) {
+                              return <code className={`bg-slate-700 text-yellow-200 px-1.5 py-0.5 rounded-md text-xs font-mono ${className || ""}`}>{children}</code>;
+                            }
+                            return <code className={className}>{children}</code>;
+                          },
+                        }}>
+                          {normalizeMarkdownBlocks(msg.content)}
+                        </ReactMarkdown>
+                      ) : (
+                        <p className="whitespace-pre-wrap">{msg.content}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {loading && (
+                  <div className="flex justify-start">
+                    <div className="bg-slate-800/80 border border-slate-700/50 text-slate-300 text-sm prose prose-invert max-w-none px-4 py-3 rounded-2xl animate-pulse">
+                      Rédaction de la formule...
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -385,7 +431,6 @@ export default function Home() {
           apiKey={apiKey || ""}
           onSelectExample={(example) => {
             setPrompt(example.label);
-            setResponse("");
           }}
           format={exportFormat}
           onFormatChange={setExportFormat}

@@ -3,8 +3,14 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { z } from "zod";
 import { rateLimit, getClientIp, dailyFreeLimit } from "@/lib/rateLimit";
 
+const MessageSchema = z.object({
+  role: z.enum(["user", "model"]),
+  content: z.string(),
+});
+
 const GeminiRequestSchema = z.object({
-  prompt: z.string().min(1, "Le prompt ne peut pas être vide").max(3000, "Le prompt est trop long (max 3000 caractères)"),
+  prompt: z.string().max(3000, "Le prompt est trop long (max 3000 caractères)").optional(),
+  messages: z.array(MessageSchema).optional(),
   apiKey: z.string().nullable().optional(),
   modelChoice: z.enum(["flash", "pro"]).optional(),
   format: z.enum(["excel-en", "excel-fr", "libreoffice-en", "libreoffice-fr"]).optional(),
@@ -20,7 +26,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
     }
     
-    const { prompt, apiKey, modelChoice, format: reqFormat } = parsed.data;
+    const { prompt, messages, apiKey, modelChoice, format: reqFormat } = parsed.data;
+
+    let finalMessages: { role: "user" | "model"; content: string }[] = [];
+    if (messages && messages.length > 0) {
+      finalMessages = messages;
+    } else if (prompt) {
+      finalMessages = [{ role: "user", content: prompt }];
+    } else {
+      return NextResponse.json({ error: "Le prompt ou les messages ne peuvent pas être vides." }, { status: 400 });
+    }
+
     const finalApiKey = apiKey || process.env.GEMINI_API_KEY;
     
     if (!finalApiKey) {
@@ -117,14 +133,20 @@ STRUCTURE DE RÉPONSE (respecter cet ordre) :
    Exemple : si la formule française est =SOMME.SI.ENS(E10:E12;C10:C12;"Nord";D10:D12;">="&DATE(2024;1;1)), écris :
    <!-- FORMULA_EN: =SUMIFS(E10:E12,C10:C12,"Nord",D10:D12,">="&DATE(2024,1,1)) -->`;
 
-    const fullPrompt = `${systemInstruction}\n\nRequête utilisateur: ${prompt}`;
+    const contents = finalMessages.map((msg) => ({
+      role: msg.role === "user" ? "user" : "model",
+      parts: [{ text: msg.content }],
+    }));
 
     const selectedModel = modelChoice === "pro" ? "gemini-3.1-pro" : "gemini-3.5-flash";
 
     async function generateStream(modelName: string) {
       const genAI = new GoogleGenerativeAI(apiKeyString);
-      const model = genAI.getGenerativeModel({ model: modelName });
-      return model.generateContentStream(fullPrompt);
+      const model = genAI.getGenerativeModel({ 
+        model: modelName,
+        systemInstruction: systemInstruction,
+      });
+      return model.generateContentStream({ contents });
     }
 
     let result;

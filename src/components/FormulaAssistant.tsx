@@ -255,19 +255,6 @@ export function FormulaInputBar({
                   )}
                 </div>
               )}
-              {!apiKey && dailyFreeRemaining !== null && dailyFreeRemaining !== undefined && (dailyFreeRemaining > 0 ? (
-                <span className="text-[10px] font-medium px-1.5 sm:px-2 py-1 rounded-md text-green-400 bg-green-950/20 border border-green-900/30 flex-shrink-0">
-                  {dailyFreeRemaining}/3 <span className="hidden sm:inline">aujourd&apos;hui</span>
-                </span>
-              ) : (
-                <button
-                  onClick={onRequestKeyModal}
-                  className="text-[10px] font-medium px-1.5 sm:px-2 py-1 rounded-md text-red-400 bg-red-950/30 border border-red-900/50 animate-pulse cursor-pointer hover:bg-red-900/50 transition-colors flex-shrink-0 flex items-center"
-                >
-                  <Key className="h-3 w-3 sm:mr-1" />
-                  <span className="hidden sm:inline">Limite atteinte</span>
-                </button>
-              ))}
               <span className={`text-[10px] hidden sm:inline ${prompt.length >= 2700 ? "text-red-400 font-semibold animate-pulse" : "text-slate-500"}`}>
                 {prompt.length}/3000
               </span>

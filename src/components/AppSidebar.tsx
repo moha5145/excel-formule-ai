@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Key, HelpCircle, History, Trash2, ChevronLeft, ChevronRight, Coffee, LogOut, X, AlertTriangle } from "lucide-react";
+import { Key, HelpCircle, History, Trash2, ChevronLeft, ChevronRight, Coffee, LogOut, X, AlertTriangle, Crown, Gift } from "lucide-react";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { toast } from "sonner";
 import {
@@ -29,6 +29,7 @@ interface AppSidebarProps {
   onRestoreHistory: (item: HistoryItem) => void;
   history?: HistoryItem[];
   setHistory?: (history: HistoryItem[] | ((prev: HistoryItem[]) => HistoryItem[])) => void;
+  dailyFreeRemaining?: number | null;
 }
 
 export function AppSidebar({
@@ -39,6 +40,7 @@ export function AppSidebar({
   isMobileDrawer = false,
   history: propsHistory,
   setHistory: propsSetHistory,
+  dailyFreeRemaining,
 }: AppSidebarProps & { isMobileDrawer?: boolean }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { const id = setTimeout(() => setMounted(true), 0); return () => clearTimeout(id); }, []);
@@ -217,6 +219,53 @@ export function AppSidebar({
             </div>
           )}
         </div>
+
+        {/* ── Section : Plan gratuit ────────────── */}
+        {!apiKey && dailyFreeRemaining !== null && dailyFreeRemaining !== undefined && (
+          <div className="pt-4 border-t border-slate-800/60">
+            {isCollapsed ? (
+              <button
+                onClick={onOpenKeyModal}
+                title="Plan gratuit"
+                className="w-10 h-10 flex items-center justify-center rounded-xl bg-green-950/30 border border-green-800/40 text-green-400 hover:bg-green-950/50 hover:border-green-700/60 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                aria-label="Voir le plan gratuit"
+              >
+                <Gift size={14} />
+              </button>
+            ) : (
+              <div className="bg-gradient-to-br from-green-950/20 to-slate-900 border border-green-800/20 p-3.5 rounded-2xl flex flex-col gap-2.5 shadow-[0_0_20px_-6px_rgba(34,197,94,0.1)] relative overflow-hidden group">
+                <div className="absolute -right-6 -bottom-6 w-16 h-16 bg-green-500/10 rounded-full blur-xl group-hover:bg-green-500/20 transition-all duration-300" />
+
+                <div className="flex items-center gap-2 text-green-400 font-semibold text-xs tracking-tight">
+                  <Gift size={14} className="group-hover:rotate-12 transition-transform duration-300" />
+                  <span>Plan gratuit</span>
+                </div>
+                <p className="text-[10px] text-slate-400 leading-normal">
+                  {dailyFreeRemaining > 0
+                    ? "Réinitialisation quotidienne"
+                    : "Limite atteinte aujourd'hui"}
+                </p>
+                <div className="w-full bg-slate-800/50 rounded-full h-2 overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-green-500 to-green-400 rounded-full transition-all duration-500"
+                    style={{ width: `${((3 - dailyFreeRemaining) / 3) * 100}%` }}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-slate-500">
+                    <span className="text-green-400 font-semibold">{dailyFreeRemaining}</span> / 3 messages
+                  </span>
+                  <button
+                    onClick={onOpenKeyModal}
+                    className="text-[10px] text-primary hover:text-yellow-300 font-medium transition-colors cursor-pointer"
+                  >
+                    Débloquer plus →
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ── Section : Support ───────────────────── */}
         <div className="mt-auto pt-4 border-t border-slate-800/60 flex flex-col gap-2">
