@@ -112,9 +112,13 @@ export function AppSidebar({
       
       <div className={`flex flex-col gap-5 p-3.5 overflow-hidden ${isCollapsed ? "items-center" : ""}`}>
         {/* Theme Toggle - bottom next to collapse button */}
-        {!isMobileDrawer && (
+        {!isMobileDrawer ? (
           <div className={`absolute flex justify-center w-auto ${isCollapsed ? "left-1/2 -translate-x-1/2 bottom-14" : "left-3.5 right-7 bottom-2.5"}`}>
             <ThemeToggle vertical={isCollapsed} />
+          </div>
+        ) : (
+          <div className="flex justify-center mt-auto pt-3 border-t border-border/40">
+            <ThemeToggle />
           </div>
         )}
 
