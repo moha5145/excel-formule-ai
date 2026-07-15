@@ -114,24 +114,21 @@ export default function Home() {
     }
   }, []);
 
-  // Get last model response for action buttons
-  const lastModelResponse = [...messages].reverse().find((m) => m.role === "model")?.content || "";
-
   // Copy result
-  const handleCopy = useCallback(() => {
-    if (!lastModelResponse) return;
-    const formulaMatch = lastModelResponse.match(/```(?:excel)?\n?([\s\S]*?)\n?```/);
-    const textToCopy = formulaMatch ? formulaMatch[1].trim() : lastModelResponse;
+  const handleCopy = useCallback((content: string) => {
+    if (!content) return;
+    const formulaMatch = content.match(/```(?:excel)?\n?([\s\S]*?)\n?```/);
+    const textToCopy = formulaMatch ? formulaMatch[1].trim() : content;
     navigator.clipboard.writeText(textToCopy);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
     toast.success("Formule copiée dans le presse-papier !");
-  }, [lastModelResponse]);
+  }, []);
 
   // Download result as text
-  const handleDownload = useCallback(() => {
-    if (!lastModelResponse) return;
-    const blob = new Blob([lastModelResponse], { type: "text/plain;charset=utf-8" });
+  const handleDownload = useCallback((content: string) => {
+    if (!content) return;
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -139,19 +136,19 @@ export default function Home() {
     a.click();
     URL.revokeObjectURL(url);
     toast.success("Fichier de formule téléchargé !");
-  }, [lastModelResponse]);
+  }, []);
 
   // Download Excel example
-  const handleDownloadExcel = useCallback(async () => {
-    if (!lastModelResponse) return;
+  const handleDownloadExcel = useCallback(async (content: string) => {
+    if (!content) return;
     try {
-      await downloadFormulaAsExcel(lastModelResponse, prompt || "formule", exportFormat);
+      await downloadFormulaAsExcel(content, prompt || "formule", exportFormat);
       toast.success("Fichier Excel téléchargé !");
     } catch (err: unknown) {
       console.error(err);
       toast.error("Erreur lors de la génération du fichier Excel.");
     }
-  }, [lastModelResponse, prompt, exportFormat]);
+  }, [prompt, exportFormat]);
 
   // Migrate legacy history items that lack an id
   useEffect(() => {
@@ -447,25 +444,25 @@ export default function Home() {
                         <p className="whitespace-pre-wrap">{msg.content}</p>
                       )}
                     </div>
+                    {msg.role === "model" && (
+                      <FormulaResultArea
+                        response={msg.content}
+                        loading={loading && idx === messages.length - 1}
+                        copied={copied}
+                        onCopy={() => handleCopy(msg.content)}
+                        onDownload={() => handleDownload(msg.content)}
+                        onDownloadExcel={() => handleDownloadExcel(msg.content)}
+                        onRegenerate={handleGenerate}
+                      />
+                    )}
                   </div>
                 ))}
-                {loading && !lastModelResponse && (
+                {loading && (
                   <div className="flex justify-start">
                     <div className="bg-loading-bg border border-loading-border text-loading-text text-sm prose max-w-none px-4 py-3 rounded-2xl animate-pulse">
                       Rédaction de la formule...
                     </div>
                   </div>
-                )}
-                {lastModelResponse && (
-                  <FormulaResultArea
-                    response={lastModelResponse}
-                    loading={loading}
-                    copied={copied}
-                    onCopy={handleCopy}
-                    onDownload={handleDownload}
-                    onDownloadExcel={handleDownloadExcel}
-                    onRegenerate={handleGenerate}
-                  />
                 )}
               </div>
             )}
