@@ -289,7 +289,7 @@ export default function Home() {
           const existing = historyPrev.find((item) => item.id === convId);
           const titlePrompt = existing
             ? existing.prompt
-            : (updated.find((m) => m.role === "user")?.content ?? prompt);
+            : updated.find((m) => m.role === "user")!.content;
           const filtered = historyPrev.filter((item) => item.id !== convId);
           const entry: HistoryItem = {
             id: convId,
