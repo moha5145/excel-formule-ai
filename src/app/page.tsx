@@ -286,10 +286,14 @@ export default function Home() {
       setMessages((prev) => {
         const updated = [...prev, { role: "model" as const, content: streamResponse }];
         setHistory((historyPrev) => {
+          const existing = historyPrev.find((item) => item.id === convId);
+          const titlePrompt = existing
+            ? existing.prompt
+            : (updated.find((m) => m.role === "user")?.content ?? prompt);
           const filtered = historyPrev.filter((item) => item.id !== convId);
           const entry: HistoryItem = {
             id: convId,
-            prompt,
+            prompt: titlePrompt,
             response: streamResponse,
             messages: updated,
           };
