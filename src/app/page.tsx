@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { ApiKeyModal } from "@/components/ApiKeyModal";
 import { FormulaInputBar, FormulaResultArea } from "@/components/FormulaAssistant";
 import { AppSidebar } from "@/components/AppSidebar";
-import { Menu, Copy } from "lucide-react";
+import { Menu, Copy, MessageSquarePlus } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import type { ExportFormat } from "@/lib/excelExport";
 import { downloadFormulaAsExcel } from "@/lib/excelExport";
@@ -69,6 +69,7 @@ export default function Home() {
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const [previousPrompt, setPreviousPrompt] = useState("");
   const [history, setHistory] = useLocalStorage<HistoryItem[]>("excel_compta_history", []);
+  const [currentConversationId, setCurrentConversationId] = useLocalStorage<string | null>("excel_compta_current_conv_id", null);
 
   const checkCoffeeToast = useCallback((currentCount: number) => {
     if (currentCount === 3 || currentCount === 8 || (currentCount > 8 && (currentCount - 8) % 8 === 0)) {
@@ -103,6 +104,7 @@ export default function Home() {
   // Restore item from history
   const handleRestoreItem = useCallback((item: HistoryItem) => {
     setPrompt("");
+    setCurrentConversationId(item.id);
     if (item.messages && item.messages.length > 0) {
       setMessages(item.messages);
     } else {
@@ -112,7 +114,15 @@ export default function Home() {
       ];
       setMessages(restored);
     }
-  }, []);
+  }, [setCurrentConversationId]);
+
+  // Start new conversation
+  const handleNewConversation = useCallback(() => {
+    setMessages([]);
+    setPrompt("");
+    setCopiedIdx(null);
+    setCurrentConversationId(null);
+  }, [setCurrentConversationId]);
 
   // Copy result
   const handleCopy = useCallback((content: string, idx: number) => {
@@ -269,12 +279,21 @@ export default function Home() {
         streamResponse += chunk;
       }
 
-      // Add model response to conversation history
+      // Add model response to conversation history — upsert into existing conversation
+      const convId = currentConversationId || crypto.randomUUID();
+      setCurrentConversationId(convId);
+
       setMessages((prev) => {
         const updated = [...prev, { role: "model" as const, content: streamResponse }];
         setHistory((historyPrev) => {
-          const filtered = historyPrev.filter((item) => item.prompt !== prompt);
-          return [{ id: crypto.randomUUID(), prompt, response: streamResponse, messages: updated }, ...filtered].slice(0, 10);
+          const filtered = historyPrev.filter((item) => item.id !== convId);
+          const entry: HistoryItem = {
+            id: convId,
+            prompt,
+            response: streamResponse,
+            messages: updated,
+          };
+          return [entry, ...filtered].slice(0, 20);
         });
         return updated;
       });
@@ -283,7 +302,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, [prompt, apiKey, modelChoice, dailyFreeRemaining, loading, setHistory, messages]);
+  }, [prompt, apiKey, modelChoice, dailyFreeRemaining, loading, setHistory, messages, currentConversationId, setCurrentConversationId]);
 
   // Keyboard Shortcuts (Ctrl+Enter / Cmd+Enter to generate, Ctrl+Shift+E / Cmd+Shift+E to enhance)
   useEffect(() => {
@@ -351,6 +370,18 @@ export default function Home() {
                 Excel-Formule <span className="text-primary font-sans font-medium">AI</span>
               </h1>
             </div>
+
+            {/* New Conversation Button */}
+            {messages.length > 0 && (
+              <button
+                onClick={handleNewConversation}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground bg-muted/50 hover:bg-muted border border-border/50 rounded-xl transition-all cursor-pointer"
+                aria-label="Nouvelle conversation"
+              >
+                <MessageSquarePlus size={14} />
+                <span className="hidden sm:inline">Nouveau</span>
+              </button>
+            )}
             
             {/* Theme Toggle */}
             <div className="hidden md:flex items-center">
