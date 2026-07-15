@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Key, HelpCircle, History, Trash2, ChevronLeft, ChevronRight, Coffee, LogOut, X, AlertTriangle, Crown, Gift } from "lucide-react";
+import { Key, HelpCircle, History, Trash2, ChevronLeft, ChevronRight, Coffee, LogOut, X, AlertTriangle, Crown, Gift, MessageSquarePlus } from "lucide-react";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { toast } from "sonner";
 import {
@@ -28,6 +28,8 @@ interface AppSidebarProps {
   onOpenKeyModal: () => void;
   onLogout: () => void;
   onRestoreHistory: (item: HistoryItem) => void;
+  onNewConversation?: () => void;
+  hasMessages?: boolean;
   history?: HistoryItem[];
   setHistory?: (history: HistoryItem[] | ((prev: HistoryItem[]) => HistoryItem[])) => void;
   dailyFreeRemaining?: number | null;
@@ -38,6 +40,8 @@ export function AppSidebar({
   onOpenKeyModal,
   onLogout,
   onRestoreHistory,
+  onNewConversation,
+  hasMessages = false,
   isMobileDrawer = false,
   history: propsHistory,
   setHistory: propsSetHistory,
@@ -151,6 +155,19 @@ export function AppSidebar({
             </button>
           )}
         </div>
+
+        {/* ── Section : Nouvelle conversation ───── */}
+        {hasMessages && onNewConversation && (
+          <button
+            onClick={onNewConversation}
+            className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl border border-dashed border-border hover:border-primary/40 bg-muted/30 hover:bg-primary/5 text-muted-foreground hover:text-foreground transition-all text-xs font-medium cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${isCollapsed ? "justify-center" : ""}`}
+            title="Nouvelle conversation"
+            aria-label="Démarrer une nouvelle conversation"
+          >
+            <MessageSquarePlus size={12} />
+            {!isCollapsed && "Nouvelle conversation"}
+          </button>
+        )}
 
         {/* ── Section : Historique ────────────────── */}
         <div className="flex-1 min-h-0">

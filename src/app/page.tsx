@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { ApiKeyModal } from "@/components/ApiKeyModal";
 import { FormulaInputBar, FormulaResultArea } from "@/components/FormulaAssistant";
 import { AppSidebar } from "@/components/AppSidebar";
-import { Menu, Copy, MessageSquarePlus } from "lucide-react";
+import { Menu, Copy } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import type { ExportFormat } from "@/lib/excelExport";
 import { downloadFormulaAsExcel } from "@/lib/excelExport";
@@ -351,6 +351,8 @@ export default function Home() {
           onOpenKeyModal={() => setIsKeyModalOpen(true)}
           onLogout={() => setApiKey(null)}
           onRestoreHistory={handleRestoreItem}
+          onNewConversation={handleNewConversation}
+          hasMessages={messages.length > 0}
           history={history}
           setHistory={setHistory}
           dailyFreeRemaining={dailyFreeRemaining}
@@ -370,18 +372,6 @@ export default function Home() {
                 Excel-Formule <span className="text-primary font-sans font-medium">AI</span>
               </h1>
             </div>
-
-            {/* New Conversation Button */}
-            {messages.length > 0 && (
-              <button
-                onClick={handleNewConversation}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground bg-muted/50 hover:bg-muted border border-border/50 rounded-xl transition-all cursor-pointer"
-                aria-label="Nouvelle conversation"
-              >
-                <MessageSquarePlus size={14} />
-                <span className="hidden sm:inline">Nouveau</span>
-              </button>
-            )}
             
             {/* Theme Toggle */}
             <div className="hidden md:flex items-center">
@@ -406,6 +396,11 @@ export default function Home() {
                       handleRestoreItem(item);
                       setIsMobileMenuOpen(false);
                     }}
+                    onNewConversation={() => {
+                      handleNewConversation();
+                      setIsMobileMenuOpen(false);
+                    }}
+                    hasMessages={messages.length > 0}
                     history={history}
                     setHistory={setHistory}
                     isMobileDrawer={true}
