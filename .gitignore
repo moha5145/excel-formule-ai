@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# graphify knowledge graph (auto-generated, contains local paths)
+/graphify-out/
+
+# AI agent local config
+.agents/
