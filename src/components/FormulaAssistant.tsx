@@ -131,6 +131,8 @@ export function FormulaInputBar({
                   <option value="excel-fr" className="bg-background">Excel FR</option>
                   <option value="libreoffice-en" className="bg-background">LibreOffice EN</option>
                   <option value="libreoffice-fr" className="bg-background">LibreOffice FR</option>
+                  <option value="sheets-en" className="bg-background">Sheets EN</option>
+                  <option value="sheets-fr" className="bg-background">Sheets FR</option>
                 </select>
               </div>
               <Button

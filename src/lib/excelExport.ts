@@ -438,11 +438,11 @@ export async function downloadFormulaAsExcel(
   const englishFormula = extractEnglishFormula(response);
   if (englishFormula) {
     // Utiliser directement la formule anglaise fournie par l'IA (zéro traduction)
-    activeFormula = postProcessFormula(englishFormula, "libreoffice-en");
+    activeFormula = postProcessFormula(englishFormula, format);
   } else if (simFormulaRaw) {
     // Fallback : traduction automatique FR→EN
     activeFormula = convertToUsInvariant(simFormulaRaw, format);
-    activeFormula = postProcessFormula(activeFormula, "libreoffice-en");
+    activeFormula = postProcessFormula(activeFormula, format);
   }
 
   // ── Section formule à copier-coller

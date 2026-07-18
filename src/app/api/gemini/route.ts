@@ -13,7 +13,7 @@ const GeminiRequestSchema = z.object({
   messages: z.array(MessageSchema).optional(),
   apiKey: z.string().nullable().optional(),
   modelChoice: z.enum(["flash", "pro"]).optional(),
-  format: z.enum(["excel-en", "excel-fr", "libreoffice-en", "libreoffice-fr"]).optional(),
+  format: z.enum(["excel-en", "excel-fr", "libreoffice-en", "libreoffice-fr", "sheets-en", "sheets-fr"]).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -83,6 +83,8 @@ export async function POST(req: NextRequest) {
       "excel-fr": "FORMAT DE FORMULE : Microsoft Excel (français)\n- Noms de fonctions : français (SI, RECHERCHEV, VPM, RECHERCHEX)\n- Séparateur d'arguments : ; (point-virgule)\n- Séparateur décimal : , (virgule)",
       "libreoffice-en": "FORMAT DE FORMULE : LibreOffice Calc (anglais)\n- Noms de fonctions : anglais (IF, VLOOKUP, PMT)\n- Séparateur d'arguments : , (virgule)\n- Séparateur décimal : . (point)\n- N'utilise PAS XLOOKUP ni XMATCH (non reconnus par LibreOffice) : utilise INDEX+MATCH à la place",
       "libreoffice-fr": "FORMAT DE FORMULE : LibreOffice Calc (français)\n- Noms de fonctions : français (SI, RECHERCHEV, VPM)\n- Séparateur d'arguments : ; (point-virgule)\n- Séparateur décimal : , (virgule)\n- N'utilise PAS RECHERCHEX ni EQUIVX (non reconnus par LibreOffice) : utilise INDEX+EQUIV à la place",
+      "sheets-en": "FORMAT DE FORMULE : Google Sheets (anglais)\n- Noms de fonctions : anglais (IF, VLOOKUP, PMT, XLOOKUP, LET, LAMBDA)\n- Séparateur d'arguments : , (virgule)\n- Séparateur décimal : . (point)\n- Compatible XLOOKUP, XMATCH, LET, LAMBDA, ARRAYFORMULA, QUERY, IMPORTRANGE\n- N'utilise PAS TEXTSPLIT, VSTACK, HSTACK, WRAPROWS, WRAPCOLS, TAKE, DROP (Excel 365 uniquement)\n- Pour les tableaux dynamiques, utilise ARRAYFORMULA au lieu du spill Excel",
+      "sheets-fr": "FORMAT DE FORMULE : Google Sheets (français)\n- Noms de fonctions : français (SI, RECHERCHEV, VPM, RECHERCHEX, LET, LAMBDA)\n- Séparateur d'arguments : ; (point-virgule)\n- Séparateur décimal : , (virgule)\n- Compatible XLOOKUP, XMATCH, LET, LAMBDA, ARRAYFORMULA, QUERY, IMPORTRANGE\n- N'utilise PAS TEXTE.STXT, VSTACK, HSTACK, WRAPROWS, WRAPCOLS, TAKE, DROP (Excel 365 uniquement)\n- Pour les tableaux dynamiques, utilise ARRAYFORMULA au lieu du spill Excel",
     };
 
     const formatKey = reqFormat || "libreoffice-fr";

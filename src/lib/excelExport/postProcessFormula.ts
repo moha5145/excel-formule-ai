@@ -1,4 +1,4 @@
-export type ExportFormat = "excel-en" | "excel-fr" | "libreoffice-en" | "libreoffice-fr";
+export type ExportFormat = "excel-en" | "excel-fr" | "libreoffice-en" | "libreoffice-fr" | "sheets-en" | "sheets-fr";
 
 const FRENCH_TO_ENGLISH: Record<string, string> = {
   SI: "IF", SIERREUR: "IFERROR", "SI.NON.DISP": "IFNA", "SI.CONDITIONS": "IFS",
@@ -34,18 +34,21 @@ export function postProcessFormula(formula: string, format: ExportFormat): strin
     result = convertXlookupToIndexMatch(result, "fr");
   }
 
-  // Inject _xlfn. for modern Excel functions so they work in LibreOffice & Excel when exported via ExcelJS
-  const modernFns = ["MAXIFS", "MINIFS", "IFS", "IFNA", "CONCAT", "TEXTJOIN", "SWITCH", "XLOOKUP", "XMATCH"];
-  for (const fn of modernFns) {
-    const regex = new RegExp(`(?:_xlfn\\.)?(\\b${fn}\\b)(?=\\s*\\()`, "gi");
-    result = result.replace(regex, "_xlfn.$1");
+  // Inject _xlfn. for modern Excel functions (LibreOffice & Excel via ExcelJS)
+  // Google Sheets does NOT use _xlfn. prefix
+  if (!format.startsWith("sheets")) {
+    const modernFns = ["MAXIFS", "MINIFS", "IFS", "IFNA", "CONCAT", "TEXTJOIN", "SWITCH", "XLOOKUP", "XMATCH"];
+    for (const fn of modernFns) {
+      const regex = new RegExp(`(?:_xlfn\\.)?(\\b${fn}\\b)(?=\\s*\\()`, "gi");
+      result = result.replace(regex, "_xlfn.$1");
+    }
   }
 
   return result;
 }
 
 export function convertToUsInvariant(formula: string, format: ExportFormat): string {
-  if (format === "excel-en" || format === "libreoffice-en") {
+  if (format === "excel-en" || format === "libreoffice-en" || format === "sheets-en") {
     return formula;
   }
 
