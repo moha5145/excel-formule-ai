@@ -46,6 +46,7 @@ interface Message {
   role: "user" | "model";
   content: string;
   fileName?: string;
+  userPrompt?: string;
 }
 
 interface HistoryItem {
@@ -157,16 +158,16 @@ export default function Home() {
   }, []);
 
   // Download Excel example
-  const handleDownloadExcel = useCallback(async (content: string) => {
+  const handleDownloadExcel = useCallback(async (content: string, promptForFile: string) => {
     if (!content) return;
     try {
-      await downloadFormulaAsExcel(content, prompt || "formule", exportFormat);
+      await downloadFormulaAsExcel(content, promptForFile || "formule", exportFormat);
       toast.success("Fichier Excel téléchargé !");
     } catch (err: unknown) {
       console.error(err);
       toast.error("Erreur lors de la génération du fichier Excel.");
     }
-  }, [prompt, exportFormat]);
+  }, [exportFormat]);
 
   // Migrate legacy history items that lack an id
   useEffect(() => {
@@ -231,14 +232,20 @@ export default function Home() {
     setLoading(true);
 
     // Add user message to conversation immediately
-    const newUserMessage = { role: "user" as const, content: prompt, ...(fileContext ? { fileName: fileContext.fileName } : {}) };
+    const userPromptText = prompt;
+    const newUserMessage = {
+      role: "user" as const,
+      content: userPromptText,
+      userPrompt: userPromptText,
+      ...(fileContext ? { fileName: fileContext.fileName } : {}),
+    };
     setMessages((prev) => [...prev, newUserMessage]);
 
     // Clear input after sending
     setPrompt("");
 
     // Build messages to send (current messages + new user message)
-    let finalContent = prompt;
+    let finalContent = userPromptText;
     if (fileContext) {
       finalContent += `\n\n[Données du fichier importé : "${fileContext.fileName}"]\n\`\`\`\n${fileContext.textRepresentation}\n\`\`\``;
     }
@@ -296,7 +303,7 @@ export default function Home() {
       setCurrentConversationId(convId);
 
       setMessages((prev) => {
-        const updated = [...prev, { role: "model" as const, content: streamResponse }];
+        const updated = [...prev, { role: "model" as const, content: streamResponse, userPrompt: userPromptText }];
         setHistory((historyPrev) => {
           const existing = historyPrev.find((item) => item.id === convId);
           const titlePrompt = existing
@@ -503,7 +510,7 @@ export default function Home() {
                         copied={copiedIdx === idx}
                         onCopy={() => handleCopy(msg.content, idx)}
                         onDownload={() => handleDownload(msg.content)}
-                        onDownloadExcel={() => handleDownloadExcel(msg.content)}
+                        onDownloadExcel={() => handleDownloadExcel(msg.content, msg.userPrompt || "")}
                         onRegenerate={handleGenerate}
                       />
                     )}

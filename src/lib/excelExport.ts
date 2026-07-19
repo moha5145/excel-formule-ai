@@ -327,9 +327,9 @@ export async function downloadFormulaAsExcel(
   sheet1.mergeCells("B4:H4");
   const demCell = sheet1.getCell("B4");
   demCell.value = prompt;
-  demCell.font = { name: "Segoe UI", size: 10, italic: true, color: { argb: SLATE_700 } };
+  demCell.font = { name: "Segoe UI", size: 12, italic: false, bold: true, color: { argb: SLATE_900 } };
   demCell.alignment = { wrapText: true, vertical: "top" };
-  sheet1.getRow(4).height = 24;
+  sheet1.getRow(4).height = 30;
 
   // ── Formule générée
   setLabel("A6", "Formule :");
@@ -409,9 +409,9 @@ export async function downloadFormulaAsExcel(
   sheet2.mergeCells("A3:H3");
   const sub = sheet2.getCell("A3");
   sub.value = prompt;
-  sub.font = { name: "Segoe UI", size: 10, italic: false, color: { argb: SLATE_700 } };
+  sub.font = { name: "Segoe UI", size: 11, bold: true, color: { argb: SLATE_900 } };
   sub.alignment = { vertical: "middle", horizontal: "left", wrapText: true };
-  sheet2.getRow(3).height = 24;
+  sheet2.getRow(3).height = 28;
 
   let nextRow = 4;
 
