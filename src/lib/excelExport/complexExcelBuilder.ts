@@ -1,5 +1,5 @@
 import ExcelJS from "exceljs";
-import { type TableSchema, type TableColumn } from "./schemaParser";
+import { type TableSchema, type TableColumn, type ReferenceTable } from "./schemaParser";
 import { type ExportFormat, resolveFormulaTemplate } from "./postProcessFormula";
 import { extractTables } from "../excelExport";
 
@@ -488,5 +488,155 @@ export function buildComplexWorkbook(
     sheetGuide.getColumn(c).width = 18;
   }
 
+  // --- ONGLET(S) : DONNÉES DE RÉFÉRENCE (lookup tables) ---
+  if (schema.reference_tables && schema.reference_tables.length > 0) {
+    for (const refTable of schema.reference_tables) {
+      buildReferenceTableSheet(workbook, refTable, warnings);
+    }
+  }
+
   return { workbook, warnings };
+}
+
+function buildReferenceTableSheet(
+  workbook: ExcelJS.Workbook,
+  refTable: ReferenceTable,
+  warnings: string[]
+): void {
+  const sheet = workbook.addWorksheet(refTable.sheet_name);
+  sheet.views = [{ showGridLines: true }];
+
+  const numCols = refTable.headers.length;
+
+  // L1 : Titre
+  sheet.mergeCells(`A1:${String.fromCharCode(64 + numCols)}1`);
+  const titleCell = sheet.getCell("A1");
+  titleCell.value = refTable.name.toUpperCase();
+  titleCell.font = { name: "Segoe UI", size: 12, bold: true, color: { argb: WHITE } };
+  titleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: SLATE_900 } };
+  titleCell.alignment = { vertical: "middle", horizontal: "center" };
+  sheet.getRow(1).height = 28;
+
+  // Description (si présente)
+  let startRowIdx = 3;
+  if (refTable.description) {
+    sheet.mergeCells(`A2:${String.fromCharCode(64 + numCols)}2`);
+    const descCell = sheet.getCell("A2");
+    descCell.value = refTable.description;
+    descCell.font = { name: "Segoe UI", size: 9, italic: true, color: { argb: SLATE_500 } };
+    descCell.alignment = { vertical: "middle", horizontal: "left", wrapText: true };
+    sheet.getRow(2).height = 18;
+  }
+
+  // Headers
+  const headerRowIdx = startRowIdx;
+  const headerRow = sheet.getRow(headerRowIdx);
+  headerRow.height = 22;
+  for (let c = 0; c < numCols; c++) {
+    const cell = headerRow.getCell(1 + c);
+    cell.value = refTable.headers[c];
+    cell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: WHITE } };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF334155" } };
+    cell.alignment = { horizontal: "center", vertical: "middle" };
+    cell.border = {
+      top: { style: "thin", color: { argb: "FF475569" } },
+      bottom: { style: "medium", color: { argb: "FF1E293B" } },
+      left: { style: "thin", color: { argb: "FF475569" } },
+      right: { style: "thin", color: { argb: "FF475569" } },
+    };
+  }
+
+  // Vérification de cohérence avec start_ref
+  const refMatch = refTable.start_ref.match(/^([A-Za-z0-9_]+)!([A-Z]{1,3})(\d+)$/);
+  if (!refMatch) {
+    warnings.push(`Table "${refTable.name}": start_ref "${refTable.start_ref}" invalide, ignoré`);
+    return;
+  }
+  const expectedSheetName = refMatch[1];
+  const expectedColLetter = refMatch[2];
+  const expectedRowNum = parseInt(refMatch[3], 10);
+
+  if (expectedSheetName !== refTable.sheet_name) {
+    warnings.push(
+      `Table "${refTable.name}": sheet_name=${refTable.sheet_name} mais start_ref pointe vers ${expectedSheetName}. ` +
+      `Les formules du tableau interactif risquent de ne pas trouver les données.`
+    );
+  }
+
+  // Décalage attendu entre la position attendue par les formules (start_ref)
+  // et la position réelle d'écriture (headerRowIdx + 1, car header = ligne 0 dans la table de référence)
+  const actualStartRow = headerRowIdx + 1; // 1ère ligne de données après header
+  const rowOffset = expectedRowNum - actualStartRow;
+  const actualStartCol = expectedColLetter.charCodeAt(0) - 64; // 'A' = 1
+  // On ne décale pas les colonnes (on suppose que la 1ère colonne = A, ce qui est standard)
+  // Si l'IA référence $I$10:$I$15 mais qu'on écrit en A4:A15, il y aura un mismatch → warning + on prévient
+  if (expectedColLetter !== "A") {
+    warnings.push(
+      `Table "${refTable.name}": start_ref indique la colonne ${expectedColLetter} ` +
+      `mais cette implementation écrit seulement en colonne A. Les formules INDEX/MATCH utilisant ` +
+      `$${expectedColLetter}$${expectedRowNum} peuvent pointer vers une zone vide.`
+    );
+  }
+
+  // Lignes de données
+  for (let r = 0; r < refTable.rows.length; r++) {
+    const row = sheet.getRow(actualStartRow + r);
+    row.height = 20;
+    const dataRow = refTable.rows[r];
+
+    for (let c = 0; c < Math.min(numCols, dataRow.length); c++) {
+      const cell = row.getCell(1 + c);
+      const rawValue = dataRow[c];
+      const colType = refTable.column_types?.[c] || "text";
+
+      if (rawValue === null || rawValue === undefined) {
+        cell.value = "";
+      } else if (typeof rawValue === "number") {
+        cell.value = rawValue;
+        setCellFormatByType(cell, colType);
+      } else {
+        // Essayer de parser les nombres en format FR (avec virgule décimale, espaces)
+        const strVal = String(rawValue);
+        if (colType !== "text" && strVal.trim() !== "") {
+          const cleaned = strVal
+            .replace(/\s/g, "")
+            .replace(/€|euro/gi, "")
+            .replace(/%/g, "")
+            .replace(",", ".");
+          const num = Number(cleaned);
+          if (!isNaN(num) && cleaned !== "") {
+            cell.value = num;
+            setCellFormatByType(cell, colType);
+            cell.alignment = { horizontal: "right", vertical: "middle" };
+            continue;
+          }
+        }
+        cell.value = strVal;
+        cell.alignment = { horizontal: colType === "text" ? "left" : "right", vertical: "middle" };
+      }
+    }
+  }
+
+  // Largeurs colonnes
+  for (let c = 1; c <= numCols; c++) {
+    sheet.getColumn(c).width = 20;
+  }
+
+  // Note explicative en bas
+  const noteRowIdx = actualStartRow + refTable.rows.length + 1;
+  sheet.mergeCells(`A${noteRowIdx}:${String.fromCharCode(64 + numCols)}${noteRowIdx}`);
+  const noteCell = sheet.getCell(`A${noteRowIdx}`);
+  noteCell.value = `📋 Table de référence "${refTable.name}" — Les formules du tableau interactif pointent vers cette feuille (${refTable.sheet_name}).`;
+  noteCell.font = { name: "Segoe UI", size: 9, italic: true, color: { argb: SLATE_500 } };
+  noteCell.alignment = { vertical: "middle", horizontal: "left", wrapText: true };
+  sheet.getRow(noteRowIdx).height = 18;
+
+  // Report d'un warning si décalage de lignes détecté
+  if (rowOffset !== 0) {
+    warnings.push(
+      `Table "${refTable.name}": les formules du tableau interactif référencent $${expectedColLetter}$${expectedRowNum} ` +
+      `mais les données ont été écrites à la ligne ${actualStartRow}. ` +
+      `Décalage de ${rowOffset} ligne(s) — les formules INDEX/MATCH risques de pointer vers la mauvaise plage.`
+    );
+  }
 }

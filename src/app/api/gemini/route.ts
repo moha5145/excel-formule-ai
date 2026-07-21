@@ -218,6 +218,76 @@ RÈGLES CRITIQUES pour les formules du schéma :
     * "formula" pour le format demandé
     * "formula_en" toujours en anglais invariant
 
+TABLES DE RÉFÉRENCE (lookup tables) — quand les formules utilisent INDEX/MATCH, XLOOKUP, RECHERCHEV :
+  Si tu utilises une table de référence externe (ex: liste de produits par catégorie, barème de commission par palier),
+  tu DOIS la déclarer dans le champ optionnel "reference_tables" du schéma pour qu'elle soit écrite dans un onglet
+  séparé du fichier Excel généré.
+  Chaque table de référence a cette structure :
+    {
+      "name": "Nom de la table (court)",
+      "sheet_name": "NomFeuilleExcel",  // MAX 31 caractères, lettres/chiffres/underscore SANS espaces
+      "start_ref": "NomFeuilleExcel!A1",  // cellule de début OBLIGATOIREMENT dans la feuille sheet_name
+                                         // les formules du tableau interactif doivent pointer vers cette zone
+      "headers": ["Catégorie", "Produit", "Prix"],
+      "rows": [
+        ["Électronique", "Ordinateur", 1200],
+        ["Électronique", "Téléphone", 800],
+        ["Mobilier", "Armoire", 500]
+      ],
+      "column_types": ["text", "text", "currency"],   // optionnel mais recommandé
+      "description": "Table des produits par catégorie"
+    }
+  RÈGLES POUR LES TABLES DE RÉFÉRENCE :
+    1. "start_ref" DOIT pointer vers la colonne A de la feuille (ex: "MaFeuille!A1", "MaFeuille!A4").
+       Le builder écrit les données en colonne A. Si tu utilises une autre colonne dans start_ref,
+       les formules du tableau interactif risquent de pointer vers une zone vide.
+    2. "sheet_name" doit être unique dans le schéma (chaque table a sa propre feuille).
+    3. Les "rows" ne doivent pas dépasser "headers.length" colonnes.
+    4. Les formules du tableau interactif qui utilisent INDEX/MATCH doivent référencer la zone EXACTE
+       couverte par start_ref + headers + rows. Par exemple, si start_ref="Produits!A1" et headers a 3 colonnes
+       et rows a 6 lignes, la zone est Produits!A1:C6.
+       Référence dans la formule : =INDEX(Produits!$C$1:$C$6, MATCH(D{row}, Produits!$B$1:$B$6, 0))
+  EXEMPLE — Liste déroulante dynamique (Commande avec Lookup Produits) :
+    Schéma attendu :
+    <!-- TABLE_SCHEMA: {
+      "type": "complex_table",
+      "title": "Commande avec Liste Deroulante",
+      "parameters": [
+        { "name": "Taux TVA", "ref": "C5", "value": 0.20, "type": "percentage", "unit": "%" }
+      ],
+      "columns": [
+        { "header": "Catégorie", "type": "text", "formula": null, "formula_en": null },
+        { "header": "Produit", "type": "text", "formula": null, "formula_en": null },
+        { "header": "Quantité", "type": "integer", "formula": null, "formula_en": null },
+        { "header": "Prix Unitaire", "type": "currency",
+          "formula": "=IF(D{row}=\"\", 0, INDEX(RefProduits!$C$2:$C$6, MATCH(D{row}, RefProduits!$B$2:$B$6, 0)))",
+          "formula_en": "=IF(D{row}=\"\", 0, INDEX(RefProduits!$C$2:$C$6, MATCH(D{row}, RefProduits!$B$2:$B$6, 0)))" },
+        { "header": "Total HT", "type": "currency", "formula": "=E{row}*F{row}", "formula_en": "=E{row}*F{row}" },
+        { "header": "Total TTC", "type": "currency", "formula": "=G{row}*(1+$C$5)", "formula_en": "=G{row}*(1+$C$5)" }
+      ],
+      "data_start_row": 10,
+      "sample_rows": 3,
+      "reference_tables": [
+        {
+          "name": "Produits par catégorie",
+          "sheet_name": "RefProduits",
+          "start_ref": "RefProduits!A1",
+          "headers": ["Catégorie", "Produit", "Prix"],
+          "rows": [
+            ["Électronique", "Ordinateur", 1200],
+            ["Électronique", "Téléphone", 800],
+            ["Mobilier", "Armoire", 500],
+            ["Mobilier", "Chaise", 150],
+            ["Mobilier", "Table", 350]
+          ],
+          "column_types": ["text", "text", "currency"],
+          "description": "Liste triée par catégorie — utilisée pour INDEX/MATCH"
+        }
+      ]
+    } -->
+    Note : La 1ère ligne de la feuille est réservée pour le titre + headers (écrits par le builder à partir de start_ref).
+    Les données commencent à la ligne suivante. Vérifie la cohérence entre start_ref et les références absolues dans tes formules.
+
 QUAND UTILISER le mode complexe (général, n'importe quel domaine) :
   - Demandes nécessitant PLUS D'1 colonne calculée (formules distinctes par colonne)
   - Tableaux d'amortissement, plan de remboursement, échéancier
@@ -229,11 +299,55 @@ QUAND UTILISER le mode complexe (général, n'importe quel domaine) :
   - Comptabilité analytique, répartition de coûts
   - Calculs scientifiques avec chaînes de dépendances
   - Quand l'utilisateur importe un fichier avec un tableau existant multi-colonnes à compléter
+  - ⚠️ AGRÉGATIONS CONDITIONNELLES OBLIGATOIREMENT EN MODE COMPLEXE :
+        MAX.SI.ENS, SOMME.SI.ENS, NB.SI.ENS, MOYENNE.SI.ENS, MAXIFS, SUMIFS, COUNTIFS, AVERAGEIFS,
+        ou toute formule qui calcule une AGRÉGATION sur une plage conditionnée par un critère.
+    Le mode simple réplique une formule par ligne, ce qui ne marche PAS pour ces agrégations.
+    En mode complexe, tu DOIS produire un tableau pilote avec :
+        - Une colonne INPUT par dimension d'agrégation (ex: "Service", "Salaire")
+        - Une colonne CALCULÉE qui applique l'agrégation par ligne, en utilisant la valeur de la ligne 
+          en cours comme critère (ex: MAXIFS(salaire_plage, service_plage, C{row}))
+          où C{row} est le service de la ligne courante)
 
 QUAND RESTER en mode simple (comportement actuel) :
-  - Une seule formule à produire (TVA, pourcentage, RECHERCHEV, SI simple…)
-  - Le résultat se résume à une seule colonne calculée
+  - Une seule formule à produire, NON agrégative (TVA, pourcentage, RECHERCHEV simple, SI simple, texte, date)
+  - Le résultat se résume à une seule colonne calculée, appliquée ligne par ligne
   - Demande ponctuelle sans tableau complet
+  - IMPORTANT : SI la formule contient un critère variable (ex: MAX.SI.ENS, SOMME.SI.ENS, NB.SI.ENS),
+    ALORS c'est FORCEMENT du mode complexe (voir ci-dessus)
+
+EXEMPLE — "Salaire maximum par service" (MAXIFS en mode complexe) :
+  Demande utilisateur : "Trouver le salaire maximum des employés du service Marketing"
+  Tu DOIS produire un schéma comme celui-ci :
+  <!-- TABLE_SCHEMA: {
+    "type": "complex_table",
+    "title": "Salaires et maximum par service",
+    "parameters": [
+      { "name": "Service à analyser", "ref": "C5", "value": "Marketing", "type": "text" }
+    ],
+    "columns": [
+      { "header": "Service", "type": "text", "formula": null, "formula_en": null,
+        "description": "Service de l'employé" },
+      { "header": "Salaire", "type": "currency", "formula": null, "formula_en": null,
+        "description": "Salaire brut mensuel" },
+      { "header": "Salaire max du service", "type": "currency",
+        "formula": "=MAX.SI.ENS($D$11:$D$20, $C$11:$C$20, C{row})",
+        "formula_en": "=MAXIFS($D$11:$D$20, $C$11:$C$20, C{row})",
+        "description": "Salaire le plus élevé du même service que la ligne courante" },
+      { "header": "Salaire max global (filtre C5)", "type": "currency",
+        "formula": "=MAX.SI.ENS($D$11:$D$20, $C$11:$C$20, $C$5)",
+        "formula_en": "=MAXIFS($D$11:$D$20, $C$11:$C$20, $C$5)",
+        "description": "Salaire le plus élevé du service specifie en cellule C5" }
+    ],
+    "data_start_row": 10,
+    "sample_rows": 7
+  } -->
+  RATIONNEL :
+    - La 1ère formule utilise C{row} (service de la ligne en cours) → renvoie le max du MEME service
+    - La 2ème formule utilise $C$5 (saisissable par l'utilisateur) → renvoie le max du service choisi
+    - Les 2 solutions coexistent pour répondre aux différentes interprétations de la demande
+    - Les réfs $C$11:$C$20 sont ABSOLUES car l'agrégation porte sur toute la plage, pas sur une seule ligne
+    - "sample_rows": 7 lignes (taille raisonnable pour illustrer sur différents services)
 
 RÈGLES ABSOLUES à suivre sans exception :
 1. N'invente JAMAIS une fonction Excel/Sheets qui n'existe pas. Si tu as un doute, dis-le explicitement.
