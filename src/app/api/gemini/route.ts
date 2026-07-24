@@ -108,6 +108,27 @@ GÉNÉRAL : L'utilisateur souhaite une formule accompagnée d'un petit tableau d
   2. Fournis une explication claire.
   3. Inclus un tableau Markdown simple de démonstration (3 à 5 lignes d'exemple avec des valeurs réalistes).
   4. IL EST STRICTEMENT INTERDIT d'ajouter un schéma JSON (<!-- TABLE_SCHEMA --> est STRICTEMENT INTERDIT dans ce mode).
+
+RÈGLES DE RÉFÉRENCES CELLULES DANS LA FORMULE (obligatoires) :
+  - La première colonne de données du tableau commence à la colonne C, ligne 10 (C10).
+  - Les colonnes suivantes sont D10, E10, F10... (dans l'ordre du tableau Markdown).
+  - La DERNIÈRE colonne du tableau est le RÉSULTAT de la formule.
+  - Si la formule a besoin d'un paramètre constant (valeur globale), utilise $C$5, $C$6...
+  - N'utilise PAS A, B comme colonnes de données. Commence toujours à C.
+  - La formule DOIT utiliser les mêmes colonnes que le tableau Markdown.
+    Exemple : si le tableau a "Prix HT" (colonne C) et "TVA 20%" (colonne D),
+    la formule utilise C10 (Prix HT) et D10 (TVA) : =C10*D10
+  - Exemple correct : =$C$5 * C10 / 366
+  - Exemple INCORRECT : =$B$1 * A4 (utilise les mauvaises colonnes/rangées)
+
+PARAMÈTRES GLOBAUX (valeurs constantes utilisées par la formule) :
+  Si ta formule utilise des paramètres globaux ($C$5, $C$6...), tu DOIS fournir leur valeur
+  en commentaire HTML invisible :
+    <!-- PARAM C5 = 120000 -->
+    <!-- PARAM C6 = 0.05 -->
+  La valeur DOIT être un nombre (pas de texte, pas de formule).
+  Sans ce commentaire, l'Excel généré aura des cellules vides et la simulation sera cassée.
+
 MODE OVERRIDE : AUTORISÉ. Si tu juges que la demande nécessite IMPÉRATIVEMENT un tableau complexe (voir CHECKLIST : ≥2 colonnes calculées distinctes, OU agrégation conditionnelle type SOMME.SI.ENS/MAX.SI.ENS, OU table de référence pour INDEX/MATCH), ALORS :
   - Bascule en mode tableau complexe : génère le tableau Markdown, le schéma <!-- TABLE_SCHEMA: { ... } -->, et la formule EN.
   - En TOUT DÉBUT de ta réponse, écris EXACTEMENT la ligne : <!-- MODE_OVERRIDE: complex_table -->
@@ -412,10 +433,16 @@ Si l'utilisateur fournit des données de fichier (tableau markdown avec en-tête
 STRUCTURE DE RÉPONSE (respecter cet ordre) :
 1. La formule dans un bloc de code markdown.
 2. Une explication concise, claire et professionnelle de la logique de calcul.
- 3. INCLURE OBLIGATOIREMENT un tableau Markdown d'exemple au format suivant :
-   | Ligne   | Paramètre1 | Paramètre2 | ... | Résultat     |
-   Règles :
-   - Première colonne = "Ligne" avec labels ("Ligne 1", "Ligne 2", ...)
+ 3. INCLURE OBLIGATOIREMENT un tableau Markdown d'exemple AU COMPLET, avec la colonne "Ligne" comme première colonne :
+    | Ligne   | Paramètre1 | Paramètre2 | ... | Résultat     |
+    Règles :
+    - Le tableau DOIT commencer par la colonne "Ligne". EXEMPLE CORRECT :
+      | Ligne | Capital | Taux | Durée | Mensualité |
+      |-------|---------|------|-------|------------|
+      | Ligne 1 | 250000 | 3.5% | 20 | 1449.89 |
+    - EXEMPLE INCORRECT (ne JAMAIS faire) :
+      | Capital | Taux | Durée | Mensualité |
+      (la colonne "Ligne" est absente — c'est une ERREUR)
    - Colonnes suivantes = paramètres d'entrée avec en-têtes descriptifs (ex: "Capital", "Taux annuel", "Durée")
    - La DERNIÈRE colonne contient le RÉSULTAT ATTENDU calculé pour cette ligne. Son en-tête décrit le résultat (ex: "Mensualité", "Total TVA", "Prime", "Salaire max")
    - TRÈS IMPORTANT : SI vous utilisez une table de référence (pour RECHERCHEV, INDEX/EQUIV), ces colonnes de référence DOIVENT se trouver AVANT la dernière colonne (colonne de résultat). Ne placez RIEN après la colonne de résultat.

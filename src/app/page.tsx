@@ -9,7 +9,7 @@ import { FileUpload } from "@/components/FileUpload";
 import { Menu, Copy, FileSpreadsheet } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import type { ExportFormat } from "@/lib/excelExport";
-import { downloadFormulaAsExcel } from "@/lib/excelExport";
+import { downloadFormulaAsExcel, normalizeTablesInResponse } from "@/lib/excelExport";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -319,7 +319,8 @@ export default function Home() {
       }
 
       const { content: cleanContent, effectiveMode } = applyModeOverride(streamResponse, generationMode);
-      const assistantMessage = { role: "model" as const, content: cleanContent, userPrompt: userPromptText, generationMode: effectiveMode };
+      const normalizedContent = normalizeTablesInResponse(cleanContent);
+      const assistantMessage = { role: "model" as const, content: normalizedContent, userPrompt: userPromptText, generationMode: effectiveMode };
       const updatedMessages = [...messagesToSend, assistantMessage];
       setMessages(updatedMessages);
 
@@ -332,7 +333,7 @@ export default function Home() {
         const newHistoryItem: HistoryItem = {
           id: convId,
           prompt: userPromptText,
-          response: cleanContent,
+          response: normalizedContent,
           messages: updatedMessages,
         };
         let nextHistory: HistoryItem[];

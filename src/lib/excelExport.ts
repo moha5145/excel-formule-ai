@@ -41,10 +41,9 @@ function extractSimulationParams(
   const formulaRaw = "";
   const resultLabel = "Résultat";
 
-  // Headers = première ligne du tableau (header row), en excluant "Ligne"
+  // La 1ʳᵉ colonne est "Ligne" (normalisée par extractTables) — on l'exclut
   const headers = table.headers.slice(1);
 
-  // Initialiser les colonnes
   for (let c = 0; c < headers.length; c++) {
     const colLetter = String.fromCharCode(67 + c); // C=67, D=68, E=69
     columns.push({ letter: colLetter, header: headers[c], params: [] });
@@ -232,7 +231,92 @@ export function extractTables(markdown: string): ExtractedTable[] {
     }
   }
   if (inTable && currentTable) { tables.push(currentTable); }
+
+  // Normalisation : s'assurer que la 1ère colonne est "Ligne"
+  for (const t of tables) {
+    if (!/^ligne$/i.test(t.headers[0]?.trim())) {
+      t.headers.unshift("Ligne");
+      for (let r = 0; r < t.rows.length; r++) {
+        t.rows[r].unshift(`Ligne ${r + 1}`);
+      }
+    }
+  }
+
   return tables;
+}
+
+// Ajoute la colonne "Ligne" aux tableaux Markdown d'une réponse (pour affichage)
+export function normalizeTablesInResponse(response: string): string {
+  const lines = response.split("\n");
+  const out: string[] = [];
+  let inTable = false;
+  let inCodeBlock = false;
+  let hasLigne = false;
+  let buffer: string[] = [];
+
+  const isSepLine = (l: string) => {
+    const c = l.split("|").filter((_, i, a) => i > 0 && i < a.length - 1);
+    return c.length > 0 && c.every(x => /^\s*:?-+:?\s*$/.test(x.trim()));
+  };
+
+  const flushTable = () => {
+    if (buffer.length === 0) return;
+    if (!hasLigne) {
+      const headerCells = buffer[0].split("|");
+      if (headerCells.length >= 3) {
+        headerCells.splice(1, 0, " Ligne ");
+        buffer[0] = headerCells.join("|");
+      }
+      let dataIdx = 0;
+      for (let i = 1; i < buffer.length; i++) {
+        if (isSepLine(buffer[i])) {
+          // Insérer " Ligne " dans le séparateur aussi pour garder le nb de colonnes
+          const cells = buffer[i].split("|");
+          if (cells.length >= 3) {
+            cells.splice(1, 0, " :--- ");
+            buffer[i] = cells.join("|");
+          }
+          continue;
+        }
+        dataIdx++;
+        const cells = buffer[i].split("|");
+        if (cells.length >= 3) {
+          cells.splice(1, 0, ` Ligne ${dataIdx} `);
+          buffer[i] = cells.join("|");
+        }
+      }
+    }
+    out.push(...buffer);
+    buffer = [];
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (line.startsWith("```")) { inCodeBlock = !inCodeBlock; out.push(rawLine); continue; }
+    if (inCodeBlock) { out.push(rawLine); continue; }
+
+    const isTableRow = line.startsWith("|") && line.endsWith("|");
+    if (isTableRow) {
+      const cellsForSep = line.split("|").filter((_, i, a) => i > 0 && i < a.length - 1);
+      const isSep = cellsForSep.length > 0 && cellsForSep.every(c => /^\s*:?-+:?\s*$/.test(c.trim()));
+      if (isSep) { buffer.push(rawLine); continue; }
+
+      const cells = line.split("|").filter((_, i, a) => i > 0 && i < a.length - 1);
+      if (!inTable) {
+        flushTable();
+        inTable = true;
+        hasLigne = /^ligne$/i.test(cells[0]?.trim());
+        buffer = [rawLine];
+      } else {
+        buffer.push(rawLine);
+      }
+    } else {
+      if (inTable) { inTable = false; flushTable(); }
+      out.push(rawLine);
+    }
+  }
+  if (inTable) flushTable();
+  return out.join("\n");
 }
 
 // Nettoie le Markdown et retourne un tableau de { text, isHeader, isSub }
@@ -447,114 +531,72 @@ export async function downloadFormulaAsExcel(
   sub.alignment = { vertical: "middle", horizontal: "left", wrapText: true };
   sheet2.getRow(3).height = 28;
 
-  let nextRow = 4;
-
   // ── Pré-extraction des paramètres de simulation
   let simParams: SimParam[] = [];
   let simColumns: SimColumn[] = [];
   let simFormulaRaw = formulaRaw;
-  let zone1Formula = "";
+  let hasTable = false;
 
   if (tables.length > 0) {
     const { params, columns, formulaRaw: extracted } = extractSimulationParams(tables[0]);
     simParams = params;
     simColumns = columns;
     simFormulaRaw = extracted || formulaRaw;
-
-    if (simParams.length > 0 && simFormulaRaw) {
-      zone1Formula = postProcessFormula(simFormulaRaw, format);
-    }
+    hasTable = simParams.length > 0 && !!simFormulaRaw;
   }
 
-  // ── Formule active pour les cellules de résultat (colonne verte)
-  const DATA_START_ROW = 10;
+  // ── Formule active
+  const DATA_START_ROW = mode === "complex_table" ? 10 : 5;
   let activeFormula = "";
   const englishFormula = extractEnglishFormula(response);
   if (englishFormula) {
-    // Utiliser directement la formule anglaise fournie par l'IA (zéro traduction)
     activeFormula = postProcessFormula(englishFormula, format);
   } else if (simFormulaRaw) {
-    // Fallback : traduction automatique FR→EN
     activeFormula = convertToUsInvariant(simFormulaRaw, format);
     activeFormula = postProcessFormula(activeFormula, format);
   }
 
-  // ── Section formule à copier-coller
-  const writeSection = (row: number, label: string, value: string) => {
-    const labelCell = sheet2.getCell(`B${row}`);
-    labelCell.value = label;
-    labelCell.font = { name: "Segoe UI", size: 9, bold: true, color: { argb: SLATE_500 } };
-
-    sheet2.mergeCells(`C${row}:H${row}`);
-    const valCell = sheet2.getCell(`C${row}`);
-    valCell.value = value;
-    valCell.font = { name: "Consolas", size: 11, bold: true, color: { argb: AMBER } };
-    valCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: LIGHT_BG } };
-    valCell.alignment = { wrapText: true, vertical: "middle" };
-    valCell.border = {
-      top: { style: "thin", color: { argb: "FFE2E8F0" } },
-      bottom: { style: "thin", color: { argb: "FFE2E8F0" } },
-      left: { style: "thin", color: { argb: "FFE2E8F0" } },
-      right: { style: "thin", color: { argb: "FFE2E8F0" } },
-    };
-    sheet2.getRow(row).height = 28;
-  };
-
-  // Titre de la section formule
-  sheet2.mergeCells(`B${nextRow}:H${nextRow}`);
-  const secTitle = sheet2.getCell(`B${nextRow}`);
-  secTitle.value = "📋  Formule prête à coller";
-  secTitle.font = { name: "Segoe UI", size: 11, bold: true, color: { argb: SLATE_900 } };
-  sheet2.getRow(nextRow).height = 22;
-  nextRow++;
-
-  // Utiliser la formule réécrite si disponible, sinon l'originale
-  const displayFormula = zone1Formula || formulaRaw;
-
-  if (displayFormula) {
-    writeSection(nextRow, "Formule :", displayFormula);
-    nextRow++;
+  // ── Inline <!-- PARAM ref = value --> dans la formule
+  const paramRefs: { ref: string; value: number }[] = [];
+  const paramRegex = /<!--\s*PARAM\s+(\$?[A-Z]+\$?\d+)\s*=\s*([\d.,]+)\s*-->/g;
+  let pm;
+  while ((pm = paramRegex.exec(response)) !== null) {
+    const ref = pm[1].replace(/\$/g, "");
+    const val = parseFloat(pm[2].replace(/,/g, "."));
+    if (!isNaN(val)) paramRefs.push({ ref, value: val });
+  }
+  if (activeFormula) {
+    for (const pr of paramRefs) {
+      const m = pr.ref.match(/^([A-Z]+)(\d+)$/);
+      if (!m) continue;
+      const col = m[1];
+      const row = m[2];
+      const patterns = [
+        `$${col}$${row}`,       // $C$5  (most specific first)
+        `$${col}${row}`,        // $C5
+        `${col}$${row}`,        // C$5
+        `${col}${row}`,         // C5
+      ];
+      for (const p of patterns) {
+        const escaped = p.replace(/\$/g, '\\$');
+        activeFormula = activeFormula.replace(
+          new RegExp(`(?<![A-Z])${escaped}(?![\\d.])`, 'g'),
+          String(pr.value)
+        );
+      }
+    }
   }
 
-  // Note instructions
-  sheet2.mergeCells(`B${nextRow}:H${nextRow}`);
-  const instrCell = sheet2.getCell(`B${nextRow}`);
-  instrCell.value = "👆  Copiez la formule ci-dessus et collez-la dans une cellule vide de votre classeur.";
-  instrCell.font = { name: "Segoe UI", size: 9, italic: true, color: { argb: SLATE_500 } };
-  sheet2.getRow(nextRow).height = 18;
-  nextRow += 2;
+  // ── Tableau en premier, formule + explication en dessous
+  let nextRow = 4;
 
-  // ── SIMULATION INTERACTIVE (Zone 2)
-  if (simParams.length > 0 && simFormulaRaw) {
-    // ── Titre section simulation
-    sheet2.mergeCells(`B${nextRow}:H${nextRow}`);
-    const simTitle = sheet2.getCell(`B${nextRow}`);
-    simTitle.value = "🧪  Simulez votre formule — Modifiez les valeurs en jaune";
-    simTitle.font = { name: "Segoe UI", size: 11, bold: true, color: { argb: SLATE_900 } };
-    sheet2.getRow(nextRow).height = 22;
-    nextRow++;
-
-    // ── Headers du tableau de simulation
+  if (hasTable) {
+    // ── Headers du tableau
     const simHeaderRow = sheet2.getRow(nextRow);
     simHeaderRow.height = 24;
 
-    // Colonne B : "Ligne"
-    const labelHeader = simHeaderRow.getCell(2);
-    labelHeader.value = "Ligne";
-    labelHeader.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: WHITE } };
-    labelHeader.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF334155" } };
-    labelHeader.alignment = { horizontal: "center", vertical: "middle" };
-    labelHeader.border = {
-      top: { style: "thin", color: { argb: "FF475569" } },
-      bottom: { style: "medium", color: { argb: "FF1E293B" } },
-      left: { style: "thin", color: { argb: "FF475569" } },
-      right: { style: "thin", color: { argb: "FF475569" } },
-    };
-
-    // Colonnes de données : headers depuis simColumns
-    for (let c = 0; c < simColumns.length; c++) {
-      const cell = simHeaderRow.getCell(3 + c);
-      cell.value = simColumns[c].header;
+    const headerCell = (colIdx: number) => {
+      const cell = simHeaderRow.getCell(colIdx);
       cell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: WHITE } };
       cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF334155" } };
       cell.alignment = { horizontal: "center", vertical: "middle" };
@@ -564,15 +606,21 @@ export async function downloadFormulaAsExcel(
         left: { style: "thin", color: { argb: "FF475569" } },
         right: { style: "thin", color: { argb: "FF475569" } },
       };
+      return cell;
+    };
+
+    headerCell(2).value = "Ligne";
+
+    for (let c = 0; c < simColumns.length; c++) {
+      headerCell(3 + c).value = simColumns[c].header;
     }
     nextRow++;
 
     // ── Lignes de données
     const GOLD_BORDER = "FFD97706";
     const LIGHT_YELLOW = "FFFEF3C7";
-
-    // Nombre de lignes = max des params par colonne
     const numRows = Math.max(...simColumns.map(c => c.params.length), 0);
+    const isComplex = mode === "complex_table";
 
     for (let r = 0; r < numRows; r++) {
       const row = sheet2.getRow(nextRow);
@@ -615,8 +663,25 @@ export async function downloadFormulaAsExcel(
         if (param) {
           if (isResult && activeFormula) {
             let rowFormula = activeFormula;
-            const cellRefRegex = new RegExp(`(?<!:)(\\b[A-Z]{1,3})${DATA_START_ROW}\\b(?![:(])`, 'g');
-            rowFormula = rowFormula.replace(cellRefRegex, (match, col) => `${col}${DATA_START_ROW + r}`);
+            if (isComplex) {
+              const cellRefRegex = new RegExp(`(?<!:)(\\b[A-Z]{1,3})${DATA_START_ROW}\\b(?![:(])`, 'g');
+              rowFormula = rowFormula.replace(cellRefRegex, (_m, col) => `${col}${DATA_START_ROW + r}`);
+            } else {
+              const rowRefs = [...new Set(
+                (rowFormula.match(/[A-Z]{1,3}(\d+)/g) || [])
+                  .map(ref => parseInt(ref.match(/\d+/)?.[0] || "0", 10))
+                  .filter(n => n > 0)
+              )].sort((a, b) => a - b);
+              const minRow = rowRefs.length > 0 ? rowRefs[0] : DATA_START_ROW;
+              if (minRow !== DATA_START_ROW) {
+                const delta = DATA_START_ROW - minRow;
+                rowFormula = rowFormula.replace(/(\$?)([A-Z]{1,3})(\$?)(\d+)/g, (_m, cd, col, rd, rowStr) => {
+                  return rd === "$" ? _m : `${cd}${col}${rd}${parseInt(rowStr, 10) + delta}`;
+                });
+              }
+              const cellRefRegex = new RegExp(`(?<!:)(\\b[A-Z]{1,3})${DATA_START_ROW}\\b(?![:(])`, 'g');
+              rowFormula = rowFormula.replace(cellRefRegex, (_m, col) => `${col}${DATA_START_ROW + r}`);
+            }
             cell.value = { formula: rowFormula.replace(/^=/, "") };
             cell.numFmt = "#,##0.00";
           } else if (param.type === "text") {
@@ -648,35 +713,62 @@ export async function downloadFormulaAsExcel(
       nextRow++;
     }
 
-    // ── Zone 3 : Instructions
-    sheet2.mergeCells(`B${nextRow}:H${nextRow}`);
-    const instrCellSim = sheet2.getCell(`B${nextRow}`);
-    instrCellSim.value = "💡  Modifiez les valeurs jaunes pour tester d'autres scénarios. Les résultats (colonne verte) se recalcule automatiquement.";
-    instrCellSim.font = { name: "Segoe UI", size: 9, italic: true, color: { argb: SLATE_500 } };
-    sheet2.getRow(nextRow).height = 18;
+    // ── Formule + instructions en dessous du tableau
     nextRow++;
 
+    const writeSection = (row: number, label: string, value: string) => {
+      const labelCell = sheet2.getCell(`B${row}`);
+      labelCell.value = label;
+      labelCell.font = { name: "Segoe UI", size: 9, bold: true, color: { argb: SLATE_500 } };
+      sheet2.mergeCells(`C${row}:H${row}`);
+      const valCell = sheet2.getCell(`C${row}`);
+      valCell.value = value;
+      valCell.font = { name: "Consolas", size: 11, bold: true, color: { argb: AMBER } };
+      valCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: LIGHT_BG } };
+      valCell.alignment = { wrapText: true, vertical: "middle" };
+      valCell.border = {
+        top: { style: "thin", color: { argb: "FFE2E8F0" } },
+        bottom: { style: "thin", color: { argb: "FFE2E8F0" } },
+        left: { style: "thin", color: { argb: "FFE2E8F0" } },
+        right: { style: "thin", color: { argb: "FFE2E8F0" } },
+      };
+      sheet2.getRow(row).height = 28;
+    };
+
     sheet2.mergeCells(`B${nextRow}:H${nextRow}`);
-    const instrCellSim2 = sheet2.getCell(`B${nextRow}`);
-    instrCellSim2.value = "📋  Copiez la formule ci-dessus (Zone 1) pour l'utiliser dans votre classeur.";
-    instrCellSim2.font = { name: "Segoe UI", size: 9, italic: true, color: { argb: SLATE_500 } };
+    const secTitle = sheet2.getCell(`B${nextRow}`);
+    secTitle.value = isComplex
+      ? "🧪  Modifiez les valeurs jaunes, les résultats (colonne verte) se recalculent automatiquement."
+      : "📋  Formule à copier-coller dans votre classeur";
+    secTitle.font = { name: "Segoe UI", size: 11, bold: true, color: { argb: SLATE_900 } };
+    sheet2.getRow(nextRow).height = 22;
+    nextRow++;
+
+    const displayFormula = formulaRaw || simFormulaRaw;
+    if (displayFormula) {
+      writeSection(nextRow, "Formule :", displayFormula);
+      nextRow++;
+    }
+
+    sheet2.mergeCells(`B${nextRow}:H${nextRow}`);
+    const instrCell = sheet2.getCell(`B${nextRow}`);
+    instrCell.value = isComplex
+      ? "Copiez la formule pour l'utiliser dans votre classeur."
+      : "Copiez la formule ci-dessus et collez-la dans une cellule vide. Adaptez les références si nécessaire.";
+    instrCell.font = { name: "Segoe UI", size: 9, italic: true, color: { argb: SLATE_500 } };
     sheet2.getRow(nextRow).height = 18;
     nextRow += 2;
   } else {
-    // Pas de tableau : juste un message clair et de l'espace vide
-    sheet2.mergeCells(`B${nextRow}:H${nextRow}`);
-    const noTableMsg = sheet2.getCell(`B${nextRow}`);
-    noTableMsg.value = "ℹ️  Aucune donnée d'exemple détectée dans la réponse IA.";
-    noTableMsg.font = { name: "Segoe UI", size: 10, italic: true, color: { argb: SLATE_500 } };
-    sheet2.getRow(nextRow).height = 18;
-    nextRow++;
-
-    sheet2.mergeCells(`B${nextRow}:H${nextRow}`);
-    const noTableHint = sheet2.getCell(`B${nextRow}`);
-    noTableHint.value = "   Utilisez la formule ci-dessus (Zone 1) dans votre propre classeur.";
-    noTableHint.font = { name: "Segoe UI", size: 9, color: { argb: SLATE_500 } };
-    sheet2.getRow(nextRow).height = 18;
+    // Pas de tableau : message + formule
     nextRow += 2;
+    if (formulaRaw) {
+      sheet2.mergeCells(`B${nextRow}:H${nextRow}`);
+      const noTableExplain = sheet2.getCell(`B${nextRow}`);
+      noTableExplain.value = "ℹ️  Aucun tableau d'exemple dans la réponse. La formule est disponible dans l'onglet \"Formule & Guide\".";
+      noTableExplain.font = { name: "Segoe UI", size: 10, italic: true, color: { argb: SLATE_500 } };
+      sheet2.getRow(nextRow).height = 18;
+      nextRow += 2;
+    }
   }
 
   // Largeurs colonnes onglet 2
