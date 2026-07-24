@@ -1,7 +1,7 @@
 "use client";
 import { useRef, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Loader2, Copy, Check, Wand2, Undo2, Zap, Brain, Key, Download, FileSpreadsheet, FileType, RefreshCw, Code2, Table, Calculator } from "lucide-react";
+import { Loader2, Copy, Check, Wand2, Undo2, Zap, Brain, Key, Download, FileSpreadsheet, FileType, RefreshCw, Code2, Table } from "lucide-react";
 import type { ExportFormat } from "@/lib/excelExport";
 
 export type GenerationMode = "formula_only" | "simple_table" | "complex_table";
@@ -87,7 +87,8 @@ export function FormulaInputBar({
   return (
     <div className="w-full bg-background/90 backdrop-blur-2xl border-t border-border/80 py-3 px-3 sm:py-4 sm:px-6 flex-shrink-0 z-30">
       <div className="max-w-4xl mx-auto flex flex-col gap-2">
-        {/* Mode Selector */}
+        {/* Mode Selector — 2 boutons. L'IA décide seule si le tableau est simple ou complexe
+            (voir MODE_OVERRIDE dans route.ts : simple_table→complex_table auto eligibilité). */}
         <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-xl border border-border/40 text-xs self-start mb-0.5 max-w-full overflow-x-auto">
           <button
             type="button"
@@ -97,7 +98,7 @@ export function FormulaInputBar({
                 ? "bg-background text-foreground shadow-xs border border-border/60"
                 : "text-muted-foreground hover:text-foreground"
             }`}
-            title="Générer uniquement la formule avec explication (rapide)"
+            title="Générer uniquement la formule avec explication (rapide, sans tableau)"
           >
             <Code2 size={13} className={generationMode === "formula_only" ? "text-primary" : ""} />
             <span>Formule seule</span>
@@ -107,28 +108,14 @@ export function FormulaInputBar({
             type="button"
             onClick={() => onGenerationModeChange("simple_table")}
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg transition-all text-xs font-medium cursor-pointer whitespace-nowrap ${
-              generationMode === "simple_table"
+              generationMode !== "formula_only"
                 ? "bg-background text-foreground shadow-xs border border-border/60"
                 : "text-muted-foreground hover:text-foreground"
             }`}
-            title="Formule + Tableau d'exemples simple"
+            title="Formule + tableau d'exemple. L'IA choisit automatiquement un tableau simple ou une simulation complexe selon votre demande."
           >
-            <Table size={13} className={generationMode === "simple_table" ? "text-primary" : ""} />
-            <span>Tableau simple</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onGenerationModeChange("complex_table")}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg transition-all text-xs font-medium cursor-pointer whitespace-nowrap ${
-              generationMode === "complex_table"
-                ? "bg-background text-foreground shadow-xs border border-border/60"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-            title="Formule + Tableau de simulation interactif complet"
-          >
-            <Calculator size={13} className={generationMode === "complex_table" ? "text-primary" : ""} />
-            <span>Tableau complexe</span>
+            <Table size={13} className={generationMode !== "formula_only" ? "text-primary" : ""} />
+            <span>Formule + tableau</span>
           </button>
         </div>
 

@@ -92,50 +92,11 @@ export async function POST(req: NextRequest) {
     const formatKey = reqFormat || "libreoffice-fr";
     const formatInstruction = FORMAT_INSTRUCTIONS[formatKey] || FORMAT_INSTRUCTIONS["libreoffice-fr"];
 
-    let modeInstruction = "";
-    if (generationMode === "formula_only") {
-      modeInstruction = `MODE DEMANDÉ : FORMULE SEULE (RAPIDE)
-GÉNÉRAL : L'utilisateur souhaite uniquement obtenir la formule et son explication textuelle.
-  1. Fournis le bloc de code avec la formule exacte adaptée au format choisi.
-  2. Fournis une explication synthétique sous forme de puces.
-  3. Ne génère AUCUN tableau Markdown de données.
-  4. IL EST STRICTEMENT INTERDIT d'ajouter un schéma JSON (<!-- TABLE_SCHEMA --> est STRICTEMENT INTERDIT dans ce mode).
-MODE OVERRIDE : INTERDIT. Ce mode est verrouillé par l'utilisateur. Ne change RIEN même si la demande semble demander un tableau. Réponds en mode formule seule.`;
-    } else if (generationMode === "simple_table") {
-      modeInstruction = `MODE DEMANDÉ : TABLEAU SIMPLE
-GÉNÉRAL : L'utilisateur souhaite une formule accompagnée d'un petit tableau d'exemple.
-  1. Fournis le bloc de code avec la formule exacte.
-  2. Fournis une explication claire.
-  3. Inclus un tableau Markdown simple de démonstration (3 à 5 lignes d'exemple avec des valeurs réalistes).
-  4. IL EST STRICTEMENT INTERDIT d'ajouter un schéma JSON (<!-- TABLE_SCHEMA --> est STRICTEMENT INTERDIT dans ce mode).
-
-RÈGLES DE RÉFÉRENCES CELLULES DANS LA FORMULE (obligatoires) :
-  - La première colonne de données du tableau commence à la colonne C, ligne 10 (C10).
-  - Les colonnes suivantes sont D10, E10, F10... (dans l'ordre du tableau Markdown).
-  - La DERNIÈRE colonne du tableau est le RÉSULTAT de la formule.
-  - Si la formule a besoin d'un paramètre constant (valeur globale), utilise $C$5, $C$6...
-  - N'utilise PAS A, B comme colonnes de données. Commence toujours à C.
-  - La formule DOIT utiliser les mêmes colonnes que le tableau Markdown.
-    Exemple : si le tableau a "Prix HT" (colonne C) et "TVA 20%" (colonne D),
-    la formule utilise C10 (Prix HT) et D10 (TVA) : =C10*D10
-  - Exemple correct : =$C$5 * C10 / 366
-  - Exemple INCORRECT : =$B$1 * A4 (utilise les mauvaises colonnes/rangées)
-
-PARAMÈTRES GLOBAUX (valeurs constantes utilisées par la formule) :
-  Si ta formule utilise des paramètres globaux ($C$5, $C$6...), tu DOIS fournir leur valeur
-  en commentaire HTML invisible :
-    <!-- PARAM C5 = 120000 -->
-    <!-- PARAM C6 = 0.05 -->
-  La valeur DOIT être un nombre (pas de texte, pas de formule).
-  Sans ce commentaire, l'Excel généré aura des cellules vides et la simulation sera cassée.
-
-MODE OVERRIDE : AUTORISÉ. Si tu juges que la demande nécessite IMPÉRATIVEMENT un tableau complexe (voir CHECKLIST : ≥2 colonnes calculées distinctes, OU agrégation conditionnelle type SOMME.SI.ENS/MAX.SI.ENS, OU table de référence pour INDEX/MATCH), ALORS :
-  - Bascule en mode tableau complexe : génère le tableau Markdown, le schéma <!-- TABLE_SCHEMA: { ... } -->, et la formule EN.
-  - En TOUT DÉBUT de ta réponse, écris EXACTEMENT la ligne : <!-- MODE_OVERRIDE: complex_table -->
-  - Dans le cas contraire (mode simple suffit), n'écris AUCUNE ligne <!-- MODE_OVERRIDE: ... -->.`;
-    } else {
-      modeInstruction = `MODE DEMANDÉ : TABLEAU COMPLEXE (SIMULATION & INTERACTIVITÉ)
-MODE COMPLEXE — TABLEAUX MULTI-FORMULES (général, tout domaine) :
+    // ─────────────────────────────────────────────────────────────────────────
+    // Bloc réutilisable : spécification complète du schéma TABLE_SCHEMA complexe.
+    // Partagé par les modes simple_table (override auto) et complex_table (direct).
+    // ─────────────────────────────────────────────────────────────────────────
+    const COMPLEX_SCHEMA_SPEC = `MODE COMPLEXE — TABLEAUX MULTI-FORMULES (général, tout domaine) :
 GÉNÉRAL : Quand la demande de l'utilisateur nécessite un tableau avec >= 2 colonnes CALCULÉES 
 (chacune avec sa propre formule, potentiellement dépendantes entre elles), tu DOIS :
   1. Fournir ton explication Markdown et ton tableau Markdown normal (visible dans le chat).
@@ -388,9 +349,13 @@ EXEMPLE — "Salaire maximum par service" (MAXIFS en mode complexe) :
     - La 2ème formule utilise $C$5 (saisissable par l'utilisateur) → renvoie le max du service choisi
     - Les 2 solutions coexistent pour répondre aux différentes interprétations de la demande
     - Les réfs $C$11:$C$20 sont ABSOLUES car l'agrégation porte sur toute la plage, pas sur une seule ligne
-    - "sample_rows": 7 lignes (taille raisonnable pour illustrer sur différents services)
+    - "sample_rows": 7 lignes (taille raisonnable pour illustrer sur différents services)`;
 
-RÈGLES ABSOLUES à suivre sans exception :
+    // ─────────────────────────────────────────────────────────────────────────
+    // Bloc réutilisable : règles de réponse partagées (règles absolues, checklist
+    // de sélection simple/complex, contexte fichier, structure de réponse, FORMULA_EN).
+    // ─────────────────────────────────────────────────────────────────────────
+    const SHARED_RESPONSE_RULES = `RÈGLES ABSOLUES à suivre sans exception :
 1. N'invente JAMAIS une fonction Excel/Sheets qui n'existe pas. Si tu as un doute, dis-le explicitement.
 2. Vérifie mentalement la syntaxe et l'ordre exact des arguments avant de répondre.
 3. Indique toujours la version minimale requise (ex: Excel 2019+, Excel 365, ou toutes versions).
@@ -468,12 +433,85 @@ STRUCTURE DE RÉPONSE (respecter cet ordre) :
 5. OBLIGATOIRE — À la toute fin de ta réponse, ajoute un commentaire HTML invisible contenant la formule traduite en anglais (noms de fonctions anglais, séparateur virgule, décimal point). Ce commentaire ne sera pas affiché à l'utilisateur. Format exact :
    <!-- FORMULA_EN: =ENGLISH_FORMULA_HERE -->
    Exemple : si la formule française est =SOMME.SI.ENS(E10:E12;C10:C12;"Nord";D10:D12;">="&DATE(2024;1;1)), écris :
-   <!-- FORMULA_EN: =SUMIFS(E10:E12,C10:C12,"Nord",D10:D12,">="&DATE(2024,1,1)) -->
-MODE OVERRIDE : AUTORISÉ. Si tu juges que la demande est en réalité simple (1 seule formule, pas d'agrégation conditionnelle, pas de table de référence, 1 colonne calculée), ALORS :
+    <!-- FORMULA_EN: =SUMIFS(E10:E12,C10:C12,"Nord",D10:D12,">="&DATE(2024,1,1)) -->`;
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Composition finale de modeInstruction selon le mode demandé.
+    // L'UI n'expose que « Formule seule » (formula_only) et « Formule + tableau »
+    // (simple_table). Le mode complex_table reste accessible via l'API directement
+    // et via les messages d'historique déjà étiquetés complex_table (override auto).
+    // Dans le mode « Formule + tableau », l'IA décide SEULE entre tableau simple et
+    // tableau complexe via la CHECKLIST ci-dessous, et émet un MODE_OVERRIDE si
+    // elle bascule vers complex_table.
+    // ─────────────────────────────────────────────────────────────────────────
+    let modeInstruction = "";
+    if (generationMode === "formula_only") {
+      modeInstruction = `MODE DEMANDÉ : FORMULE SEULE (RAPIDE)
+GÉNÉRAL : L'utilisateur souhaite uniquement obtenir la formule et son explication textuelle.
+  1. Fournis le bloc de code avec la formule exacte adaptée au format choisi.
+  2. Fournis une explication synthétique sous forme de puces.
+  3. Ne génère AUCUN tableau Markdown de données.
+  4. IL EST STRICTEMENT INTERDIT d'ajouter un schéma JSON (<!-- TABLE_SCHEMA --> est STRICTEMENT INTERDIT dans ce mode).
+MODE OVERRIDE : INTERDIT. Ce mode est verrouillé par l'utilisateur. Ne change RIEN même si la demande semble demander un tableau. Réponds en mode formule seule.`;
+    } else if (generationMode === "simple_table") {
+      modeInstruction = `MODE DEMANDÉ : FORMULE + TABLEAU (l'IA choisit simple ou complexe)
+GÉNÉRAL : L'utilisateur souhaite une formule accompagnée d'un tableau. C'est TOI qui décides,
+après analyse de la demande, si un tableau simple suffit ou s'il faut un tableau complexe interactif.
+Applique MÉCANIQUEMENT la CHECKLIST de sélection du mode (voir plus bas) avant d'écrire ta réponse.
+
+MODE PAR DÉFAUT — TABLEAU SIMPLE :
+  1. Fournis le bloc de code avec la formule exacte.
+  2. Fournis une explication claire.
+  3. Inclus un tableau Markdown simple de démonstration (3 à 5 lignes d'exemple avec des valeurs réalistes).
+  4. Ne génère AUCUN schéma JSON (<!-- TABLE_SCHEMA --> est INTERDIT en mode simple).
+
+RÈGLES DE RÉFÉRENCES CELLULES DANS LA FORMULE (mode simple, obligatoires) :
+  - La première colonne de données du tableau commence à la colonne C, ligne 10 (C10).
+  - Les colonnes suivantes sont D10, E10, F10... (dans l'ordre du tableau Markdown).
+  - La DERNIÈRE colonne du tableau est le RÉSULTAT de la formule.
+  - Si la formule a besoin d'un paramètre constant (valeur globale), utilise $C$5, $C$6...
+  - N'utilise PAS A, B comme colonnes de données. Commence toujours à C.
+  - Exemple correct : =$C$5 * C10 / 366
+  - Exemple INCORRECT : =$B$1 * A4 (utilise les mauvaises colonnes/rangées)
+
+PARAMÈTRES GLOBAUX (mode simple) :
+  Si ta formule utilise des paramètres globaux ($C$5, $C$6...), tu DOIS fournir leur valeur
+  en commentaire HTML invisible :
+    <!-- PARAM C5 = 120000 -->
+    <!-- PARAM C6 = 0.05 -->
+  La valeur DOIT être un nombre (pas de texte, pas de formule).
+
+${COMPLEX_SCHEMA_SPEC}
+
+${SHARED_RESPONSE_RULES}
+
+MODE OVERRIDE — DÉCISION SIMPLE vs COMPLEXE :
+  - Si, après application de la CHECKLIST, tu juges que la demande nécessite un TABLEAU COMPLEXE
+    (≥2 colonnes calculées distinctes, OU agrégation conditionnelle type SOMME.SI.ENS/MAX.SI.ENS,
+    OU table de référence pour INDEX/MATCH), ALORS :
+      • Bascule en mode tableau complexe : génère le tableau Markdown, le schéma
+        <!-- TABLE_SCHEMA: { ... } -->, et la formule EN — en suivant EXACTEMENT
+        la spécification COMPLEX_SCHEMA_SPEC ci-dessus.
+      • En TOUT DÉBUT de ta réponse, écris EXACTEMENT la ligne :
+        <!-- MODE_OVERRIDE: complex_table -->
+  - Dans le cas contraire (le tableau simple suffit), n'écris AUCUNE ligne <!-- MODE_OVERRIDE: ... -->.
+  - RègLE ZÉRO FLEXIBILITÉ : tu NE DOIS PAS choisir librement. Applique la CHECKLIST mécaniquement.`;
+    } else {
+      // generationMode === "complex_table" — accès direct API ou message historique.
+      modeInstruction = `MODE DEMANDÉ : TABLEAU COMPLEXE (SIMULATION & INTERACTIVITÉ)
+L'utilisateur a explicitement demandé un tableau complexe. Tu DOIS produire le schéma
+<!-- TABLE_SCHEMA: { ... } --> en suivant EXACTEMENT la spécification ci-dessous.
+
+${COMPLEX_SCHEMA_SPEC}
+
+${SHARED_RESPONSE_RULES}
+
+MODE OVERRIDE : AUTORISÉ (retour au simple). Si tu juges que la demande est en réalité simple
+(1 seule formule, pas d'agrégation conditionnelle, pas de table de référence, 1 colonne calculée), ALORS :
   - Bascule en mode tableau simple : tableau Markdown 3-5 lignes, SANS schéma <!-- TABLE_SCHEMA -->.
   - En TOUT DÉBUT de ta réponse, écris EXACTEMENT la ligne : <!-- MODE_OVERRIDE: simple_table -->
   - Dans le cas contraire (le mode complexe est justifié), n'écris AUCUNE ligne <!-- MODE_OVERRIDE: ... -->.`;
-     }
+    }
 
     const systemInstruction = `Tu es un expert certifié en tableurs (Microsoft Excel et Google Sheets) ainsi qu'en logique de calcul, formules et modélisation de données.
 
