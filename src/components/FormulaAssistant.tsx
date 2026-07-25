@@ -306,10 +306,22 @@ export function FormulaResultArea({
       <div className="flex items-start gap-2 sm:gap-3 p-3 bg-muted/40 rounded-xl border border-border/50">
         <span className="text-yellow-500 text-sm flex-shrink-0">⚠️</span>
         <p className="text-[10px] sm:text-[11px] text-muted-foreground leading-relaxed">
-          <span className="text-foreground font-medium">Vérifiez avant d&apos;utiliser en production.</span>{" "}
-          Les formules générées par IA peuvent contenir des erreurs. Testez toujours sur un jeu de données réel avant de l&apos;intégrer à vos fichiers officiels.
+          <span className="text-foreground font-medium">Vérifiez avant d'utiliser en production.</span>{" "}
+          Les formules générées par IA peuvent contenir des erreurs. Testez toujours sur un jeu de données réel avant de l'intégrer à vos fichiers officiels.
         </p>
       </div>
+
+      {response.includes("<!-- TABLE_SCHEMA:") && (
+        <div className="flex items-start gap-2 sm:gap-3 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-xl border border-blue-200 dark:border-blue-900/50">
+          <span className="text-blue-500 text-sm flex-shrink-0">🔍</span>
+          <p className="text-[10px] sm:text-[11px] text-muted-foreground leading-relaxed">
+            <span className="text-foreground font-medium">Tableau complexe généré — une colonne manque ?</span>{" "}
+            Cliquez sur{" "}
+            <span className="text-foreground font-medium">Régénérer</span>
+            {" "}— l'IA peut parfois omettre une ou deux colonnes (ici, l'IA a elle-même jugé la demande trop riche pour un tableau simple et est passée en mode complexe). Une nouvelle génération donne généralement toutes les colonnes attendues.
+          </p>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 sm:flex sm:flex-nowrap gap-2 w-full">
         <Button

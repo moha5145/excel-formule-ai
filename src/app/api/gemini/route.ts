@@ -197,7 +197,43 @@ DÉTAILS DU SCHÉMA :
     * Si la colonne est une colonne INPUT (saisie utilisateur), "formula" et "formula_en" sont null
   - "data_start_row": ligne de départ des données (10 par défaut, >= 2)
   - "sample_rows": nombre de lignes d'exemple à générer dans l'Excel (1 à 100, défaut 3).
-    Pour un calcul d'amortissement sur 12 ans, tu peux mettre 12 lignes, ou 24, etc.
+     Pour un calcul d'amortissement sur 12 ans, tu peux mettre 12 lignes, ou 24, etc.
+
+⚠️⚠️ ANTI-OMISSION DE COLONNES — LA RÈGLE LA PLUS IMPORTANTE DE TOUTE LA SPÉC ⚠️⚠️
+Tu as tendance, dans ~15% des cas, à oublier 1 ou 2 colonnes du tableau.
+Cela rend le fichier Excel INUTILISABLE. Voici la marche à suivre OBLIGATOIRE :
+
+  ÉTAPE 1 — INVENTAIRE DES CONCEPTS NOMMÉS :
+    Relis la demande utilisateur MOT PAR MOT. Liste sur un brouillon mental TOUT concept
+    qui doit apparaître comme colonne (input ou calculé). Exemples de déclencheurs :
+      - "capital", "taux", "durée", "mensualité", "intérêt", "assurance", "capital restant",
+      - "quantité", "prix unitaire", "total HT", "TVA", "total TTC", "remise",
+      - "annuité", "cumul", "VNC", "dotation", "solde initial", "solde final",
+      - "salaire", "service", "salaire max", "moyenne",
+      - toute colonne d'AGRÉGATION (MAXIFS, SUMIFS...) citée dans la demande.
+    Chaque concept nommé = UNE colonne dans "columns". AUCUNE EXCEPTION.
+
+  ÉTAPE 2 — DÉCOMPOSITION DES CONCEPTS COMPOSÉS :
+    "intérêts + capital remboursé + mensualité" → 3 colonnes distinctes.
+    "budget par mois avec cumul" → colonne Budget mensuel + colonne Cumul.
+    "amortissement avec annuité, cumul et VNC" → 3 colonnes distinctes.
+    NE JAMAIS fusionner deux concepts en une seule colonne par "condensation".
+
+  ÉTAPE 3 — DÉPENDANCES INTERMÉDIAIRES :
+    Si une colonne A sert de base à une colonne B ET que l'utilisateur a nommé A,
+    alors A DOIT figurer dans "columns" — même si tu trouves qu'elle est évidente.
+    Ex: si la demande mentionne "intérêts" et "capital restant", tu DOIS produire
+    une colonne "Intérêts" ET une colonne "Capital restant" même si l'une dérive de l'autre.
+
+  ÉTAPE 4 — COMPTAGE FINAL AVANT ENVOI :
+    AVANT de soumettre ta réponse, compte le nombre de colonnes dans "columns".
+    Recompte les concepts dans la demande utilisateur.
+    Les deux nombres DOIVENT correspondre. Sinon, ton tableau est INCOMPLET.
+
+  ÉTAPE 5 — COHÉRENCE MARKDOWN ↔ SCHÉMA :
+    Le tableau Markdown affiché dans ta réponse DOIT avoir EXACTEMENT les mêmes colonnes
+    que le schéma JSON <!-- TABLE_SCHEMA: ... --> (à l'exclusion de la colonne "Ligne").
+    Si le Markdown a 5 colonnes de données et le schéma en a 4 → ERREUR. Corrige.
 
 RÈGLES CRITIQUES pour les formules du schéma :
   - UTILISE EXCLUSIVEMENT le placeholder {row} (PAS de {row-1}, PAS de {row+1}).
@@ -394,6 +430,19 @@ Si l'utilisateur fournit des données de fichier (tableau markdown avec en-tête
 5. Pour les fichiers importés à modifier, utilise le MODE COMPLEXE si le tableau contient plusieurs colonnes calculées, afin de préserver la structure originale et d'ajouter de nouvelles formules.
 
 - Termine TOUJOURS ta réponse par une ligne : ✅ Vérification : [confirme la validité syntaxique ou signale un point à adapter].
+
+⚠️ CHECKLIST DE RELECTURE FINALE (à exécuter MENTALEMENT avant d'envoyer) :
+  ↆ A. Si tu as produit un TABLE_SCHEMA (mode complexe), recompte TOUTES les colonnes :
+      • le tableau Markdown affiché a N colonnes (hors "Ligne")
+      • le schéma JSON "columns" a N colonnes
+      • les N colonnes couvrent UN ET UN SEUL concept cité dans la demande
+      → Si N(manuel) ≠ N(schéma) ou s'il manque un concept → CORRIGE AVANT D'ENVOYER.
+  ✍ B. Si tu as produit un TABLE_SCHEMA, vérifie qu'aucune colonne calculée ne référence
+      une colonne qui n'existe pas dans "columns" (ex: formule qui pointe sur H alors que
+      H n'est pas une colonne déclarée).
+  ↆ C. Si la demande contient des concepts que tu as condensés en une seule colonne
+      (ex: "intérêt et capital regroupés"), REPRISE et crée une colonne séprarée par concept.
+  ↻ D. Si un doute subsiste sur une colonnefrontière : AJOUTE-LA plutôt que de l'omettre.
 
 STRUCTURE DE RÉPONSE (respecter cet ordre) :
 1. La formule dans un bloc de code markdown.

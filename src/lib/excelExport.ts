@@ -358,7 +358,7 @@ export async function downloadFormulaAsExcel(
   prompt: string,
   format: ExportFormat = "libreoffice-fr",
   mode?: "formula_only" | "simple_table" | "complex_table"
-): Promise<void> {
+): Promise<{ warnings: string[] }> {
   // Only explicit complex mode (or auto-overridden to complex) may use the TABLE_SCHEMA path.
   // simple_table/formula_only skip it entirely — even if the LLM leaked a malformed schema comment,
   // we fall back to the plain path so users never see "Schema de tableau complexe invalide".
@@ -376,7 +376,7 @@ export async function downloadFormulaAsExcel(
         }
         const blob = await patchWorkbookForceCalc(built);
         triggerFileDownload(blob, prompt);
-        return;
+        return { warnings };
       } catch (e) {
         if (e instanceof SchemaValidationError) {
           console.error("Schema validation failed:", e.issues);
@@ -783,6 +783,7 @@ export async function downloadFormulaAsExcel(
   // ─────────────────────────────────────────────────────────────
   const blob = await patchWorkbookForceCalc(workbook);
   triggerFileDownload(blob, prompt);
+  return { warnings: [] };
 }
 
 export async function patchWorkbookForceCalc(workbook: ExcelJS.Workbook): Promise<Blob> {

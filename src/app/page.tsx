@@ -167,8 +167,15 @@ export default function Home() {
   const handleDownloadExcel = useCallback(async (content: string, promptForFile: string, mode?: GenerationMode) => {
     if (!content) return;
     try {
-      await downloadFormulaAsExcel(content, promptForFile || "formule", exportFormat, mode);
-      toast.success("Fichier Excel téléchargé !");
+      const { warnings } = await downloadFormulaAsExcel(content, promptForFile || "formule", exportFormat, mode);
+      if (warnings.length > 0) {
+        toast.warning("Excel généré, mais avec des avertissements — si une colonne manque, Régénérez.", {
+          description: warnings.slice(0, 2).join(" ; "),
+          duration: 9000,
+        });
+      } else {
+        toast.success("Fichier Excel téléchargé !");
+      }
     } catch (err: unknown) {
       console.error(err);
       const message = err instanceof Error ? err.message : "Erreur lors de la génération du fichier Excel.";

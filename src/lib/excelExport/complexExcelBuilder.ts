@@ -403,6 +403,14 @@ export function buildComplexWorkbook(
   instrCell1.font = { name: "Segoe UI", size: 9, italic: true, color: { argb: SLATE_500 } };
   sheetInteractif.getRow(instrRowIndex).height = 18;
 
+  // Ligne d'incitation à régénérer (anti-omission de colonnes par l'IA)
+  const regenRowIndex = instrRowIndex + 1;
+  sheetInteractif.mergeCells(`B${regenRowIndex}:H${regenRowIndex}`);
+  const regenCell = sheetInteractif.getCell(`B${regenRowIndex}`);
+  regenCell.value = "🔍 Une colonne manque ou le tableau est incomplet ? Régénérez la formule dans l'application Excel-Formule AI — l'IA a elle-même jugé votre demande trop riche pour un tableau simple et a basculé en mode complexe ; une nouvelle génération donne généralement toutes les colonnes attendues.";
+  regenCell.font = { name: "Segoe UI", size: 9, italic: true, color: { argb: "FF2563EB" } };
+  sheetInteractif.getRow(regenRowIndex).height = 28;
+
   // Largeurs colonnes Tableau Interactif
   sheetInteractif.getColumn(1).width = 4;
   sheetInteractif.getColumn(2).width = 24;
