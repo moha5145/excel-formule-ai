@@ -211,6 +211,9 @@ Cela rend le fichier Excel INUTILISABLE. Voici la marche à suivre OBLIGATOIRE :
       - "annuité", "cumul", "VNC", "dotation", "solde initial", "solde final",
       - "salaire", "service", "salaire max", "moyenne",
       - toute colonne d'AGRÉGATION (MAXIFS, SUMIFS...) citée dans la demande.
+      - ⚠️ POUR LES TABLEAUX CROISÉS : chaque PERIODE citée (janvier, février, Q1, 2024, etc.)
+        DOIT devenir une colonne distincte. "Par service et par mois (Jan, Fev, Mar)" →
+        4 colonnes (Service + Janvier + Février + Mars). N'omets JAMAIS une période.
     Chaque concept nommé = UNE colonne dans "columns". AUCUNE EXCEPTION.
 
   ÉTAPE 2 — DÉCOMPOSITION DES CONCEPTS COMPOSÉS :
@@ -385,7 +388,90 @@ EXEMPLE — "Salaire maximum par service" (MAXIFS en mode complexe) :
     - La 2ème formule utilise $C$5 (saisissable par l'utilisateur) → renvoie le max du service choisi
     - Les 2 solutions coexistent pour répondre aux différentes interprétations de la demande
     - Les réfs $C$11:$C$20 sont ABSOLUES car l'agrégation porte sur toute la plage, pas sur une seule ligne
-    - "sample_rows": 7 lignes (taille raisonnable pour illustrer sur différents services)`;
+    - "sample_rows": 7 lignes (taille raisonnable pour illustrer sur différents services)
+
+⚠️⚠️ TABLEAUX CROISÉS (PIVOT) — CALCULS HORIZONTAL + VERTICAL ⚠️⚠️
+Quand la demande demande une VUE EN LIGNES × COLONNES avec totaux (ex:
+"Budget marketing par service et par mois", "Ventes par région et par trimestre",
+"Effectifs par département par année"), tu peux produire un TABLEAU CROISÉ :
+
+  - LIGNES = dimension catégorie (Service, Région, Produit...) — colonne INPUT
+  - COLONNES = dimension période (Jan, Fev, Mar...) — une colonne par valeur
+  - CELLULES = montant agrégé via SUMIFS/MAXIFS/etc qui pointe vers les en-têtes
+    de colonne (la période) ET la valeur de ligne courante (la catégorie)
+
+  Pour activer ce mode, AJOUTE AU SCHÉMA les 3 champs optionnels suivants :
+
+    - "row_total_column": { "header": "Total X", "type": "currency" }
+      → ajoute une colonne "Total" à droite qui somme chaque ligne horizontalement.
+      Excel SUM ignore le texte/dates, donc la somme se fait automatiquement sur
+      les colonnes numériques. Tu n'as PAS besoin d'écrire la formule.
+
+    - "total_row": true
+      → ajoute une ligne "TOTAUX" en bas du tableau qui somme chaque colonne
+        verticalement. Tu n'as PAS besoin d'écrire la formule non plus.
+
+    - "total_row_label": "TOTAUX"  (optionnel, défaut "TOTAUX")
+      → libellé personnalisé de la ligne de total (ex: "Total général",
+        "Sous-total", "Cumul").
+
+  EXEMPLE — "Budget marketing par service et par mois (Jan, Fev, Mar)" :
+  <!-- TABLE_SCHEMA: {
+    "type": "complex_table",
+    "title": "Budget marketing par service et par mois",
+    "parameters": [
+      { "name": "Budget source global", "ref": "C5", "value": 50000, "type": "currency" }
+    ],
+    "columns": [
+      { "header": "Service", "type": "text", "formula": null, "formula_en": null,
+        "description": "Service à budgétiser" },
+      { "header": "Janvier", "type": "currency",
+        "formula": "=SUMIFS(budgets!$D$2:$D$20, budgets!$B$2:$B$20, C{row}, budgets!$A$2:$A$20, DATE(YEAR($C$6),1,1))",
+        "formula_en": "=SUMIFS(budgets!$D$2:$D$20, budgets!$B$2:$B$20, C{row}, budgets!$A$2:$A$20, DATE(YEAR($C$6),1,1))" },
+      { "header": "Février", "type": "currency",
+        "formula": "=SUMIFS(budgets!$D$2:$D$20, budgets!$B$2:$B$20, C{row}, budgets!$A$2:$A$20, DATE(YEAR($C$6),2,1))",
+        "formula_en": "=SUMIFS(budgets!$D$2:$D$20, budgets!$B$2:$B$20, C{row}, budgets!$A$2:$A$20, DATE(YEAR($C$6),2,1))" },
+      { "header": "Mars", "type": "currency",
+        "formula": "=SUMIFS(budgets!$D$2:$D$20, budgets!$B$2:$B$20, C{row}, budgets!$A$2:$A$20, DATE(YEAR($C$6),3,1))",
+        "formula_en": "=SUMIFS(budgets!$D$2:$D$20, budgets!$B$2:$B$20, C{row}, budgets!$A$2:$A$20, DATE(YEAR($C$6),3,1))" }
+    ],
+    "data_start_row": 10,
+    "sample_rows": 4,
+    "reference_tables": [
+      {
+        "name": "Budgets par service/mois",
+        "sheet_name": "budgets",
+        "start_ref": "budgets!A1",
+        "headers": ["Date", "Service", "Montant"],
+        "rows": [
+          ["2024-01-15", "Marketing", 12000],
+          ["2024-02-10", "Marketing", 8000],
+          ["2024-03-05", "Marketing", 15000],
+          ["2024-01-20", "Ventes", 9000],
+          ["2024-02-15", "Ventes", 11000],
+          ["2024-03-22", "Ventes", 13000]
+        ],
+        "column_types": ["date", "text", "currency"]
+      }
+    ],
+    "row_total_column": { "header": "Total trim.", "type": "currency" },
+    "total_row": true,
+    "total_row_label": "TOTAUX"
+  } -->
+  RATIONNEL :
+    - La colonne "Service" est INPUT (saisie par l'utilisateur) → C{row} critère variable
+    - Chaque colonne Mois utilise SUMIFS qui filtre sur C{row} (service courant) ET sur la date
+    - "row_total_column" ajoute automatiquement "Total trim." = SUM(Jan, Fev, Mar) sur la ligne
+    - "total_row": true ajoute automatiquement une ligne TOTAUX en bas = SUM verticale par mois
+    - Le builder Excel gère les totaux SANS que tu n'écrives leurs formules.
+    - IMPORTANT : tu DOIS quand même fournir les formules des colonnes de données (Jan, Fev, Mar...).
+      Seules les formules de TOTAUX sont automatiques.
+
+  QUAND AJOUTER row_total_column / total_row :
+    - "Quand tu as un tableau croisé lignes × colonnes numériques" → OUI aux deux
+    - Tableau d'amortissement classique (capital restant cumulé par mois) → NON (pas pertinent)
+    - Budget multi-catégories, ventes multi-zones, effectifs multi-périodes → OUI
+    - Tableau avec une seule colonne numérique → NON (le total a peu de sens)`;
 
     // ─────────────────────────────────────────────────────────────────────────
     // Bloc réutilisable : règles de réponse partagées (règles absolues, checklist

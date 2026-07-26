@@ -36,6 +36,13 @@ export interface ReferenceTable {
   description?: string;
 }
 
+export interface RowTotalColumn {
+  header: string;                       // "Total ligne", "Total HT", etc.
+  type?: ColumnType;                    // défaut: currency. Format de la cellule total
+  formula_en?: string | null;           // Optionnel: formule de total personnalisée (placeholder {row}).
+                                        // Si null/absent: SUM automatique des colonnes numériques précédentes.
+}
+
 export interface TableSchema {
   type: "complex_table";
   title: string;
@@ -44,6 +51,9 @@ export interface TableSchema {
   data_start_row: number;
   sample_rows: number;
   reference_tables?: ReferenceTable[];    // tables de référence (lookup) écrites dans un onglet séparé
+  row_total_column?: RowTotalColumn;       // Optionnel: colonne "Total de ligne" à droite du tableau
+  total_row?: boolean;                     // Optionnel (défaut false): ajoute une ligne TOTAUX en bas
+  total_row_label?: string;               // Optionnel (défaut "TOTAUX"): libellé de la ligne de total
 }
 
 export class SchemaValidationError extends Error {
@@ -150,6 +160,14 @@ const ReferenceTableSchema = z.object({
   }
 });
 
+const RowTotalColumnSchema = z.object({
+  header: z.string().min(1).max(60),
+  type: ColumnTypeSchema.optional(),
+  formula_en: z.union([z.string().min(1).max(500), z.null()]).optional(),
+});
+
+const NUMERIC_COLUMN_TYPES: ColumnType[] = ["currency", "percentage", "integer", "number"];
+
 const TableSchemaZod = z.object({
   type: z.literal("complex_table"),
   title: z.string().min(1).max(120),
@@ -158,6 +176,9 @@ const TableSchemaZod = z.object({
   data_start_row: z.number().int().min(2).max(100).default(10),
   sample_rows: z.number().int().min(1).max(100).default(3),
   reference_tables: z.array(ReferenceTableSchema).max(10).optional(),
+  row_total_column: RowTotalColumnSchema.optional(),
+  total_row: z.boolean().optional().default(false),
+  total_row_label: z.string().min(1).max(40).optional().default("TOTAUX"),
 }).superRefine((schema, ctx) => {
   // Règle F4: si au moins 1 colonne est input (formula === null),
   // parameters doit être non-vide
@@ -168,6 +189,29 @@ const TableSchemaZod = z.object({
       message: "Le schéma contient des colonnes input (formula: null) mais parameters est vide",
       path: ["parameters"],
     });
+  }
+  // Pivot léger : pour qu'une colonne "Total de ligne" ait du sens, il doit y avoir
+  // AU MOINS une colonne numérique sommable (currency/percentage/integer/number).
+  if (schema.row_total_column) {
+    const summable = schema.columns.filter((c) => NUMERIC_COLUMN_TYPES.includes(c.type));
+    if (summable.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "row_total_column est défini mais aucune colonne n'est sommable (currency/percentage/integer/number)",
+        path: ["row_total_column"],
+      });
+    }
+  }
+  // Idem pour total_row : il faut au moins 1 colonne sommable
+  if (schema.total_row) {
+    const summable = schema.columns.filter((c) => NUMERIC_COLUMN_TYPES.includes(c.type));
+    if (summable.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "total_row est défini mais aucune colonne n'est sommable",
+        path: ["total_row"],
+      });
+    }
   }
 });
 

@@ -58,4 +58,63 @@ describe("complexExcelBuilder", () => {
     // Intérêts (formule)
     expect(sheet.getCell("D11").value).toEqual({ formula: "C11*$C$6/12" });
   });
+
+  it("devrait écrire colonne Total ligne + ligne TOTAUX quand row_total_column + total_row sont définis", () => {
+    const workbook = new ExcelJS.Workbook();
+    const schema: TableSchema = {
+      type: "complex_table",
+      title: "Budget par service × mois",
+      parameters: [
+        { name: "Budget global", ref: "C5", value: 50000, type: "currency" },
+      ],
+      columns: [
+        { header: "Service", type: "text", formula: null, formula_en: null },
+        { header: "Janvier", type: "currency", formula: null, formula_en: null },
+        { header: "Février", type: "currency", formula: null, formula_en: null },
+      ],
+      data_start_row: 10,
+      sample_rows: 3,
+      row_total_column: { header: "Total trim.", type: "currency" },
+      total_row: true,
+      total_row_label: "TOTAUX",
+    };
+
+    const response = `
+    | Ligne | Service | Janvier | Février |
+    |---|---|---|---|
+    | Ligne 1 | Marketing | 12000 | 8000 |
+    | Ligne 2 | Ventes | 9000 | 11000 |
+    | Ligne 3 | Support | 5000 | 6000 |
+    <!-- TABLE_SCHEMA: {"type": "complex_table"} -->
+    `;
+
+    const { workbook: result, warnings } = buildComplexWorkbook(
+      workbook, schema, response, "Budget par service", "excel-fr"
+    );
+
+    expect(warnings.length).toBe(0);
+    const sheet = result.getWorksheet("Tableau Interactif")!;
+
+    // En-têtes : B="Ligne", C="Service", D="Janvier", E="Février", F="Total trim."
+    expect(sheet.getCell("B10").value).toBe("Ligne");
+    expect(sheet.getCell("C10").value).toBe("Service");
+    expect(sheet.getCell("D10").value).toBe("Janvier");
+    expect(sheet.getCell("E10").value).toBe("Février");
+    expect(sheet.getCell("F10").value).toBe("Total trim.");
+
+    // Ligne 1 (row 11) : F11 doit contenir SUM(D11:E11)
+    expect(sheet.getCell("F11").value).toEqual({ formula: "SUM(D11:E11)" });
+
+    // Ligne 2 (row 12) : F12 = SUM(D12:E12)
+    expect(sheet.getCell("F12").value).toEqual({ formula: "SUM(D12:E12)" });
+
+    // Ligne TOTAUX (après 3 lignes de données → row 14)
+    expect(sheet.getCell("B14").value).toBe("TOTAUX");
+    // D14 = SUM(D11:D13)
+    expect(sheet.getCell("D14").value).toEqual({ formula: "SUM(D11:D13)" });
+    // E14 = SUM(E11:E13)
+    expect(sheet.getCell("E14").value).toEqual({ formula: "SUM(E11:E13)" });
+    // F14 (intersection) = SUM(F11:F13)
+    expect(sheet.getCell("F14").value).toEqual({ formula: "SUM(F11:F13)" });
+  });
 });

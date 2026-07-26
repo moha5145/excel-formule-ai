@@ -63,7 +63,17 @@ describe("schemaParser", () => {
         data_start_row: 10,
         sample_rows: 5,
       };
-      expect(validateSchema(raw)).toEqual(raw);
+      const validated = validateSchema(raw);
+      expect(validated.type).toBe("complex_table");
+      expect(validated.title).toBe("Simulation");
+      expect(validated.columns).toEqual(raw.columns);
+      expect(validated.parameters).toEqual(raw.parameters);
+      expect(validated.data_start_row).toBe(10);
+      expect(validated.sample_rows).toBe(5);
+      // Champs pivot léger : présents avec valeurs par défaut si non fournis
+      expect(validated.total_row).toBe(false);
+      expect(validated.total_row_label).toBe("TOTAUX");
+      expect(validated.row_total_column).toBeUndefined();
     });
 
     it("devrait lever une erreur si formula ou formula_en n'ont pas la même présence de null", () => {
@@ -111,6 +121,48 @@ describe("schemaParser", () => {
         parameters: [
           { name: "Montant", ref: "invalid_ref", value: 1000, type: "number" }
         ],
+      };
+      expect(() => validateSchema(raw)).toThrow(SchemaValidationError);
+    });
+
+    it("devrait valider un schéma avec row_total_column + total_row (pivot léger)", () => {
+      const raw = {
+        type: "complex_table",
+        title: "Budget par service × mois",
+        parameters: [
+          { name: "Budget global", ref: "C5", value: 50000, type: "currency" }
+        ],
+        columns: [
+          { header: "Service", type: "text", formula: null, formula_en: null },
+          { header: "Janvier", type: "currency", formula: "=SUMIFS(budget!D:D,budget!B:B,C{row})", formula_en: "=SUMIFS(budget!D:D,budget!B:B,C{row})" },
+          { header: "Février", type: "currency", formula: "=SUMIFS(budget!D:D,budget!B:B,C{row})", formula_en: "=SUMIFS(budget!D:D,budget!B:B,C{row})" },
+        ],
+        data_start_row: 10,
+        sample_rows: 3,
+        row_total_column: { header: "Total trim.", type: "currency" },
+        total_row: true,
+        total_row_label: "TOTAUX",
+      };
+      const validated = validateSchema(raw);
+      expect(validated.row_total_column?.header).toBe("Total trim.");
+      expect(validated.total_row).toBe(true);
+      expect(validated.total_row_label).toBe("TOTAUX");
+    });
+
+    it("devrait lever une erreur si row_total_column défini mais aucune colonne sommable", () => {
+      const raw = {
+        type: "complex_table",
+        title: "Toutes colonnes text",
+        parameters: [
+          { name: "X", ref: "C5", value: 1, type: "integer" }
+        ],
+        columns: [
+          { header: "Service", type: "text", formula: null, formula_en: null },
+          { header: "Note", type: "text", formula: null, formula_en: null },
+        ],
+        data_start_row: 10,
+        sample_rows: 3,
+        row_total_column: { header: "Total" },
       };
       expect(() => validateSchema(raw)).toThrow(SchemaValidationError);
     });

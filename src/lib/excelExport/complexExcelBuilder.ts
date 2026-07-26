@@ -188,7 +188,8 @@ export function buildComplexWorkbook(
   sheetGuide.views = [{ showGridLines: true }];
 
   const numCols = schema.columns.length;
-  const lastColLetter = String.fromCharCode(66 + numCols); // B est "Ligne", donc C, D, E...
+  const rowTotalColCount = schema.row_total_column ? 1 : 0;
+  const lastColLetter = String.fromCharCode(66 + numCols + rowTotalColCount); // B est "Ligne", donc C, D, E... + colonne Total ligne optionnelle
   const endColLetter = lastColLetter > "H" ? lastColLetter : "H";
 
   // --- ONGLET : TABLEAU INTERACTIF ---
@@ -300,6 +301,24 @@ export function buildComplexWorkbook(
     };
   }
 
+  // ── Colonne "Total de ligne" optionnelle (pivot léger) ──
+  // Écrit le header juste après la dernière colonne de données.
+  const rowTotal = schema.row_total_column;
+  const rowTotalColIndex = rowTotal ? 3 + numCols : -1; // index Excel 1-based
+  if (rowTotal) {
+    const cell = headerRow.getCell(rowTotalColIndex);
+    cell.value = rowTotal.header;
+    cell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: WHITE } };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E293B" } };
+    cell.alignment = { horizontal: "center", vertical: "middle" };
+    cell.border = {
+      top: { style: "thin", color: { argb: "FF475569" } },
+      bottom: { style: "medium", color: { argb: "FF1E293B" } },
+      left: { style: "medium", color: { argb: "FF1E293B" } },
+      right: { style: "thin", color: { argb: "FF475569" } },
+    };
+  }
+
   // Extraire les données d'exemple du Markdown si possible
   const mdTables = extractTables(response);
   const mdTable = mdTables[0];
@@ -393,10 +412,124 @@ export function buildComplexWorkbook(
       }
       cell.alignment = { vertical: "middle", horizontal: col.type === "text" ? "left" : "right" };
     }
+
+    // ── Cellule "Total de ligne" optionnelle (pivot léger) ──
+    // SUM automatique des colonnes NUMÉRIQUES seulement (currency/percentage/integer/number).
+    // On exclut le texte et les dates car leur somme n'a pas de sens.
+    if (rowTotal) {
+      const totalCell = row.getCell(rowTotalColIndex);
+      // Indices Excel (1-based, 3 = C) des colonnes numériques
+      const numericIndices = schema.columns
+        .map((c, i) => ((["currency", "percentage", "integer", "number"].includes(c.type)) ? 3 + i : -1))
+        .filter((i) => i >= 0);
+      // Construction de la formule SUM (range si contigu, liste sinon)
+      let sumExpr: string;
+      if (numericIndices.length === 0) {
+        sumExpr = "0";
+      } else if (numericIndices.length === 1) {
+        const letter = String.fromCharCode(64 + numericIndices[0]);
+        sumExpr = `${letter}${currRowIndex}`;
+      } else {
+        // Détecte contiguïté
+        let isContiguous = true;
+        for (let k = 1; k < numericIndices.length; k++) {
+          if (numericIndices[k] !== numericIndices[k - 1] + 1) { isContiguous = false; break; }
+        }
+        if (isContiguous) {
+          const firstLetter = String.fromCharCode(64 + numericIndices[0]);
+          const lastLetter = String.fromCharCode(64 + numericIndices[numericIndices.length - 1]);
+          sumExpr = `${firstLetter}${currRowIndex}:${lastLetter}${currRowIndex}`;
+        } else {
+          sumExpr = numericIndices
+            .map((i) => `${String.fromCharCode(64 + i)}${currRowIndex}`)
+            .join(",");
+        }
+      }
+      totalCell.value = { formula: `SUM(${sumExpr})` };
+      const totalType = rowTotal.type || "currency";
+      setCellFormatByType(totalCell, totalType);
+      totalCell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: WHITE } };
+      totalCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0F766E" } }; // teal-700
+      totalCell.border = {
+        top: { style: "thin", color: { argb: "FF0F766E" } },
+        bottom: { style: "thin", color: { argb: "FF0F766E" } },
+        left: { style: "medium", color: { argb: "FF1E293B" } },
+        right: { style: "thin", color: { argb: "FF475569" } },
+      };
+      totalCell.alignment = { vertical: "middle", horizontal: "right" };
+    }
   }
 
-  // Ligne d'instructions après le tableau
-  const instrRowIndex = startRow + 1 + sampleRowsCount;
+  // ── Ligne TOTAUX optionnelle (pivot léger) ──
+  // Écrite après les lignes de données, avant la ligne d'instructions.
+  const hasTotalRow = schema.total_row === true;
+  const totalRowLabel = schema.total_row_label || "TOTAUX";
+  if (hasTotalRow) {
+    const totalRowIndex = startRow + 1 + sampleRowsCount;
+    const tRow = sheetInteractif.getRow(totalRowIndex);
+    tRow.height = 24;
+
+    const labelCell = tRow.getCell(2); // Colonne B "Ligne"
+    labelCell.value = totalRowLabel;
+    labelCell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: WHITE } };
+    labelCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E293B" } };
+    labelCell.alignment = { vertical: "middle", horizontal: "right" };
+    labelCell.border = {
+      top: { style: "medium", color: { argb: "FF1E293B" } },
+      bottom: { style: "medium", color: { argb: "FF1E293B" } },
+      left: { style: "thin", color: { argb: "FF475569" } },
+      right: { style: "thin", color: { argb: "FF475569" } },
+    };
+
+    const firstDataExpRow = startRow + 1;
+    const lastDataExpRow = startRow + sampleRowsCount;
+    for (let c = 0; c < numCols; c++) {
+      const col = schema.columns[c];
+      const cell = tRow.getCell(3 + c);
+      const isNumeric = ["currency", "percentage", "integer", "number"].includes(col.type);
+      // Pour les colonnes text/date : on laisse VIDE (pas de sens de sommer).
+      // Pour les colonnes numériques : SUM verticale sur les lignes de données.
+      if (isNumeric) {
+        const colLetter = String.fromCharCode(67 + c);
+        const sumRange = `${colLetter}${firstDataExpRow}:${colLetter}${lastDataExpRow}`;
+        cell.value = { formula: `SUM(${sumRange})` };
+      } else {
+        cell.value = ""; // colonne non sommable
+      }
+      setCellFormatByType(cell, col.type);
+      cell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: WHITE } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0F766E" } };
+      cell.border = {
+        top: { style: "medium", color: { argb: "FF1E293B" } },
+        bottom: { style: "medium", color: { argb: "FF1E293B" } },
+        left: { style: "thin", color: { argb: "FF475569" } },
+        right: { style: "thin", color: { argb: "FF475569" } },
+      };
+      cell.alignment = { vertical: "middle", horizontal: col.type === "text" ? "left" : "right" };
+    }
+
+    // Total de la colonne "Total ligne" : SUM de la colonne total (intersection)
+    if (rowTotal) {
+      const cell = tRow.getCell(rowTotalColIndex);
+      const colLetter = String.fromCharCode(67 + numCols); // colonne après les données
+      const sumRange = `${colLetter}${firstDataExpRow}:${colLetter}${lastDataExpRow}`;
+      cell.value = { formula: `SUM(${sumRange})` };
+      const totalType = rowTotal.type || "currency";
+      setCellFormatByType(cell, totalType);
+      cell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: WHITE } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF134E4A" } }; // teal-800
+      cell.border = {
+        top: { style: "medium", color: { argb: "FF1E293B" } },
+        bottom: { style: "medium", color: { argb: "FF1E293B" } },
+        left: { style: "medium", color: { argb: "FF1E293B" } },
+        right: { style: "thin", color: { argb: "FF475569" } },
+      };
+      cell.alignment = { vertical: "middle", horizontal: "right" };
+    }
+  }
+
+  // Ligne d'instructions après le tableau (+1 si ligne TOTAUX présente)
+  const instrRowIndex = startRow + 1 + sampleRowsCount + (hasTotalRow ? 1 : 0);
   sheetInteractif.mergeCells(`B${instrRowIndex}:H${instrRowIndex}`);
   const instrCell1 = sheetInteractif.getCell(`B${instrRowIndex}`);
   instrCell1.value = "💡 Modifiez les valeurs jaunes pour tester d'autres scénarios. Les résultats (verts) se recalculent automatiquement.";
@@ -414,7 +547,8 @@ export function buildComplexWorkbook(
   // Largeurs colonnes Tableau Interactif
   sheetInteractif.getColumn(1).width = 4;
   sheetInteractif.getColumn(2).width = 24;
-  for (let c = 3; c <= 3 + numCols + 1; c++) {
+  const totalDataCols = numCols + (rowTotal ? 1 : 0);
+  for (let c = 3; c <= 3 + totalDataCols + 1; c++) {
     sheetInteractif.getColumn(c).width = 18;
   }
 
