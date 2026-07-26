@@ -253,9 +253,12 @@ export function buildComplexWorkbook(
 
       // Écrire la valeur OU la formule
       if (isCalculated) {
-        // Paramètre calculé : injecter la formule via ExcelJS
-        // Résoudre via postProcessFormula pour gérer LibreOffice/Excel format
-        const resolved = resolveFormulaTemplate(param.formula!, 1, format, true);
+        // Paramètre calculé : injecter la formule via ExcelJS.
+        // TableParameter n'expose pas formula_en (contrairement à TableColumn),
+        // donc on ne peut PAS présumer que param.formula est déjà US-invariant.
+        // On laisse convertToUsInvariant convertir les ; → , et les noms FR → EN
+        // pour les formats français (excel-fr / libreoffice-fr / sheets-fr).
+        const resolved = resolveFormulaTemplate(param.formula!, 1, format, false);
         valCell.value = { formula: resolved.replace(/^=/, "") };
       } else if (param.type === "text") {
         valCell.value = String(param.value ?? "");

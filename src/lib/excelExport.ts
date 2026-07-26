@@ -108,12 +108,16 @@ function extractSimulationParams(
         else if (/jour/i.test(col.header)) unit = "jours";
       }
 
+      // Détection du type depuis l'en-tête de colonne (utile pour la colonne résultat :
+      // "Année Fiscale" → integer, "Salaire" → currency, "Taux" → percentage).
+      // S'applique aux colonnes input ET résultat — évite d'afficher 2 024,00 pour une année.
+
       const param: SimParam = {
         name: value,
         value: paramValue,
         rawValue,
         dateValue,
-        type: isResultCol ? 'number' : paramType,
+        type: paramType,
         unit: isResultCol ? "" : unit,
         cellRef,
         colLetter: col.letter,
@@ -683,7 +687,18 @@ export async function downloadFormulaAsExcel(
               rowFormula = rowFormula.replace(cellRefRegex, (_m, col) => `${col}${DATA_START_ROW + r}`);
             }
             cell.value = { formula: rowFormula.replace(/^=/, "") };
-            cell.numFmt = "#,##0.00";
+            // Format adapté au type détecté depuis l'en-tête (évite 2 024,00 pour une année).
+            if (param.type === "integer") {
+              cell.numFmt = "0";
+            } else if (param.type === "currency") {
+              cell.numFmt = "#,##0.00 \"€\"";
+            } else if (param.type === "percentage") {
+              cell.numFmt = "0.00%";
+            } else if (param.type === "date") {
+              cell.numFmt = "dd/mm/yyyy";
+            } else {
+              cell.numFmt = "#,##0.##";
+            }
           } else if (param.type === "text") {
             cell.value = param.rawValue;
             cell.alignment = { horizontal: "left", vertical: "middle" };

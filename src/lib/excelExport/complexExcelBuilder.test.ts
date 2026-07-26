@@ -117,4 +117,50 @@ describe("complexExcelBuilder", () => {
     // F14 (intersection) = SUM(F11:F13)
     expect(sheet.getCell("F14").value).toEqual({ formula: "SUM(F11:F13)" });
   });
+
+  it("devrait convertir une formule de paramètre FR en US-invariant (excel-fr) pour éviter Err :508", () => {
+    // Cas observé en production : l'IA écrit dans param.formula une formule FR
+    // avec séparateur ';' et nom de fonction traduit (MAX.SI.ENS). ExcelJS écrit
+    // la formule telle quelle; Excel/LibreOffice ne reconnait pas ';' en locale
+    // en-US et retourne Err :508. Le builder doit convertir ; → , et FR → EN.
+    const workbook = new ExcelJS.Workbook();
+    const schema: TableSchema = {
+      type: "complex_table",
+      title: "Salaire max par service",
+      parameters: [
+        { name: "Service recherché", ref: "C5", value: "Marketing", type: "text" },
+        {
+          name: "Salaire max du service ciblé (C5)",
+          ref: "C6",
+          type: "currency",
+          formula: "=MAX.SI.ENS(D10:D16; C10:C16; $C$5)",
+        },
+      ],
+      columns: [
+        { header: "Service", type: "text", formula: null, formula_en: null },
+        { header: "Salaire (€)", type: "currency", formula: null, formula_en: null },
+      ],
+      data_start_row: 10,
+      sample_rows: 3,
+    };
+
+    const response = `
+    | Ligne | Service | Salaire (€) |
+    |---|---|---|
+    | Ligne 1 | Marketing | 1000 |
+    | Ligne 2 | Ventes | 2000 |
+    | Ligne 3 | R&D | 3000 |
+    <!-- TABLE_SCHEMA: {"type": "complex_table"} -->
+    `;
+
+    const { workbook: result } = buildComplexWorkbook(
+      workbook, schema, response, "Salaire max", "excel-fr"
+    );
+
+    const sheet = result.getWorksheet("Tableau Interactif")!;
+    // C6 doit contenir la formule US-invariante (, pas ;) avec _xlfn.MAXIFS
+    expect(sheet.getCell("C6").value).toEqual({
+      formula: "_xlfn.MAXIFS(D10:D16, C10:C16, $C$5)",
+    });
+  });
 });

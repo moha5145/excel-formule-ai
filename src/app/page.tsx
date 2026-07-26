@@ -108,7 +108,7 @@ export default function Home() {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (apiKey) return; 
+    if (apiKey) return;
     fetch("/api/quota")
       .then((res) => res.json())
       .then((data) => {
@@ -116,7 +116,7 @@ export default function Home() {
           setDailyFreeRemaining(data.remaining);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, [apiKey]);
 
   const handleRestoreItem = useCallback((item: HistoryItem) => {
@@ -389,14 +389,14 @@ export default function Home() {
       <div className="hidden md:block fixed top-[-15%] left-[15%] w-[45%] h-[50%] bg-primary/8 rounded-full blur-[160px] pointer-events-none z-0 will-change-transform" />
       <div className="hidden md:block fixed bottom-[-10%] right-[-5%] w-[35%] h-[40%] bg-primary/5 rounded-full blur-[130px] pointer-events-none z-0 will-change-transform" />
 
-      <ApiKeyModal 
-        open={isKeyModalOpen} 
-        onOpenChange={setIsKeyModalOpen} 
+      <ApiKeyModal
+        open={isKeyModalOpen}
+        onOpenChange={setIsKeyModalOpen}
         onKeySaved={(key) => {
           setApiKey(key);
           setIsKeyModalOpen(false);
           toast.success("Clé API sauvegardée !");
-        }} 
+        }}
       />
 
       <div className="hidden md:block h-full">
@@ -424,7 +424,7 @@ export default function Home() {
                 Excel-Formule <span className="text-primary font-sans font-medium">AI</span>
               </h1>
             </div>
-            
+
             <div className="hidden md:flex items-center">
               <ThemeToggle />
             </div>
@@ -482,11 +482,10 @@ export default function Home() {
               <div className="w-full max-w-4xl mx-auto flex flex-col gap-4">
                 {messages.map((msg, idx) => (
                   <div key={idx} className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}>
-                    <div className={`max-w-[85%] px-4 py-3 rounded-2xl ${
-                      msg.role === "user"
+                    <div className={`max-w-[85%] px-4 py-3 rounded-2xl ${msg.role === "user"
                         ? "bg-primary/20 border border-primary/30 text-foreground text-sm"
                         : "bg-muted/80 border border-border/50 text-sm prose dark:prose-invert prose-p:text-foreground/80 prose-a:text-primary hover:prose-a:text-yellow-400 prose-strong:text-foreground prose-li:text-foreground/80 max-w-none"
-                    }`}>
+                      }`}>
                       {msg.role === "model" ? (
                         <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
                           pre({ children, className }: { children?: ReactNode; className?: string }) {
@@ -553,7 +552,7 @@ export default function Home() {
             )}
           </div>
         </div>
-        
+
         <div className="px-3 pb-2 sm:px-6 max-w-4xl w-full mx-auto flex-shrink-0 z-40">
           <FileUpload
             key={fileUploadKey}

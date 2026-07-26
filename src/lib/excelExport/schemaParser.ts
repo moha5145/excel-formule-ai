@@ -14,7 +14,9 @@ export interface TableParameter {
   value?: number | string;   // Optionnel si formula est fourni (cellule calculée)
   type: ColumnType;
   unit?: string;         // "€", "%", "ans"
-  formula?: string | null;       // Formule EN ENGLAIS INVARIANT pour cellule paramètre calculée (ex: "=DATE(YEAR(C10),12,31)-DATE(YEAR(C10),1,1)+1")
+  formula?: string | null;       // Formule pour cellule paramètre calculée (ex: "=DATE(YEAR(C10),12,31)-DATE(YEAR(C10),1,1)+1").
+                                  // Préférer l'anglais invariant (tons/FONCTIONS EN, virgules), mais
+                                  // le builder convertit les formules FR (MAX.SI.ENS, ;, etc.) à la volée.
   formula_label?: string | null; // Formule adaptée au format utilisateur (affichage guide, optionnel)
 }
 

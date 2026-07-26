@@ -15,6 +15,7 @@ const GeminiRequestSchema = z.object({
   modelChoice: z.enum(["flash", "pro"]).optional(),
   format: z.enum(["excel-en", "excel-fr", "libreoffice-en", "libreoffice-fr", "sheets-en", "sheets-fr"]).optional(),
   generationMode: z.enum(["formula_only", "simple_table", "complex_table"]).optional(),
+  previousResponse: z.string().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -27,7 +28,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
     }
     
-    const { prompt, messages, apiKey, format: reqFormat, generationMode: reqGenerationMode } = parsed.data;
+    const { prompt, messages, apiKey, format: reqFormat, generationMode: reqGenerationMode, previousResponse } = parsed.data;
     const generationMode = reqGenerationMode || "formula_only";
 
     let finalMessages: { role: "user" | "model"; content: string }[] = [];
@@ -39,6 +40,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Le prompt ou les messages ne peuvent pas être vides." }, { status: 400 });
     }
 
+    // Régénération améliorée : si une réponse précédente est fournie, on l'injecte
+    // comme contexte pour que le modèle corrige/optimise sa propre réponse.
+    if (previousResponse) {
+      const userQuery = prompt || finalMessages[finalMessages.length - 1]?.content || "";
+      finalMessages = [
+        { role: "model", content: previousResponse },
+        {
+          role: "user",
+          content: `Tu as déjà répondu à cette requête (voir ta réponse précédente). Améliore-la : corrige les éventuelles erreurs, optimise la formule si possible, et enrichis l'explication. Utilise la même structure de réponse.\n\nRequête utilisateur: ${userQuery}`,
+        },
+      ];
+    }
     const finalApiKey = apiKey || process.env.GEMINI_API_KEY;
     
     if (!finalApiKey) {
@@ -570,15 +583,6 @@ STRUCTURE DE RÉPONSE (respecter cet ordre) :
    Exemple : si la formule française est =SOMME.SI.ENS(E10:E12;C10:C12;"Nord";D10:D12;">="&DATE(2024;1;1)), écris :
     <!-- FORMULA_EN: =SUMIFS(E10:E12,C10:C12,"Nord",D10:D12,">="&DATE(2024,1,1)) -->`;
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Composition finale de modeInstruction selon le mode demandé.
-    // L'UI n'expose que « Formule seule » (formula_only) et « Formule + tableau »
-    // (simple_table). Le mode complex_table reste accessible via l'API directement
-    // et via les messages d'historique déjà étiquetés complex_table (override auto).
-    // Dans le mode « Formule + tableau », l'IA décide SEULE entre tableau simple et
-    // tableau complexe via la CHECKLIST ci-dessous, et émet un MODE_OVERRIDE si
-    // elle bascule vers complex_table.
-    // ─────────────────────────────────────────────────────────────────────────
     let modeInstruction = "";
     if (generationMode === "formula_only") {
       modeInstruction = `MODE DEMANDÉ : FORMULE SEULE (RAPIDE)
@@ -593,7 +597,6 @@ MODE OVERRIDE : INTERDIT. Ce mode est verrouillé par l'utilisateur. Ne change R
 GÉNÉRAL : L'utilisateur souhaite une formule accompagnée d'un tableau. C'est TOI qui décides,
 après analyse de la demande, si un tableau simple suffit ou s'il faut un tableau complexe interactif.
 Applique MÉCANIQUEMENT la CHECKLIST de sélection du mode (voir plus bas) avant d'écrire ta réponse.
-
 MODE PAR DÉFAUT — TABLEAU SIMPLE :
   1. Fournis le bloc de code avec la formule exacte.
   2. Fournis une explication claire.
