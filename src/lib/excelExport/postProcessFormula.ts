@@ -82,7 +82,24 @@ export function convertToUsInvariant(formula: string, format: ExportFormat): str
   // 2. Remplacer VRAI/FAUX → TRUE/FALSE (même sans parenthèse)
   result = result.replace(/\bVRAI\b/gi, "TRUE").replace(/\bFAUX\b/gi, "FALSE");
 
-  // 3. Convertir séparateurs et décimaux
+  // 3. Convertir séparateurs et décimaux.
+  //    Heuristique : si la formule utilise ';' comme séparateur d'arguments,
+  //    elle est en format français → ';' devient ',' et les ','
+  //    entourées de chiffres (ex: "12,5") deviennent '.' (décimal).
+  //    Si elle n'utilise PAS ';' (formule déjà anglaise avec ',' comme args),
+  //    on NE convertit PAS les ',' en '.' — sinon "=DATE(YEAR(C10),12,31)"
+  //    est corrompu en "=DATE(YEAR(C10),12.31)" (#VALEUR! à l'exécution).
+  //    On détecte les ';' HORS des chaînes de caractères.
+  let hasSemicolonArgSep = false;
+  {
+    let inStr = false;
+    for (let i = 0; i < result.length; i++) {
+      const ch = result[i];
+      if (ch === '"') { inStr = !inStr; continue; }
+      if (!inStr && ch === ';') { hasSemicolonArgSep = true; break; }
+    }
+  }
+
   let out = "";
   let inString = false;
   for (let i = 0; i < result.length; i++) {
@@ -90,7 +107,7 @@ export function convertToUsInvariant(formula: string, format: ExportFormat): str
     if (c === '"') { inString = !inString; out += c; continue; }
     if (inString) { out += c; continue; }
     if (c === ";") { out += ","; continue; }
-    if (c === ",") {
+    if (c === "," && hasSemicolonArgSep) {
       const prev = result[i - 1];
       const next = result[i + 1];
       if (prev && /\d/.test(prev) && next && /[\d%]/.test(next)) {

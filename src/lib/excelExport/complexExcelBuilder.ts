@@ -152,10 +152,18 @@ function setCellValueByType(
       } else {
         const iso = String(rawValue).match(/^(\d{4})[-/](\d{2})[-/](\d{2})$/);
         const fr = String(rawValue).match(/^(\d{2})[-/](\d{2})[-/](\d{4})$/);
+        let parsed: Date | null = null;
         if (iso) {
-          cell.value = new Date(parseInt(iso[1], 10), parseInt(iso[2], 10) - 1, parseInt(iso[3], 10));
+          parsed = new Date(Date.UTC(parseInt(iso[1], 10), parseInt(iso[2], 10) - 1, parseInt(iso[3], 10), 12, 0, 0));
         } else if (fr) {
-          cell.value = new Date(parseInt(fr[3], 10), parseInt(fr[2], 10) - 1, parseInt(fr[1], 10));
+          parsed = new Date(Date.UTC(parseInt(fr[3], 10), parseInt(fr[2], 10) - 1, parseInt(fr[1], 10), 12, 0, 0));
+        }
+        if (parsed) {
+          // ExcelJS sérialise les dates en utilisant l'offset UTC du Date.
+          // Construire à midi UTC garantit qu'un éventuel arrondi vers le serial
+          // ne décale PAS la date d'un jour (ex: 01/01/2024 → 31/12/2023 sur
+          // les fuseaux négatifs ou bord de fix ExcelJS).
+          cell.value = parsed;
         } else {
           cell.value = String(rawValue);
         }
@@ -180,12 +188,12 @@ export function buildComplexWorkbook(
   workbook.modified = new Date();
   workbook.calcProperties.fullCalcOnLoad = true;
 
-  // 1. Ajouter les feuilles (ordre : interactif puis guide)
+  // 1. Ajouter les feuilles (ordre : interactif → tables de référence → guide)
+  // Le guide est créé EN DERNIER pour apparaître en dernière feuille (UX : les
+  // données interactives et de référence sont visibles avant les explications).
   const sheetInteractif = workbook.addWorksheet("Tableau Interactif");
-  const sheetGuide = workbook.addWorksheet("Formule & Guide");
 
   sheetInteractif.views = [{ showGridLines: true }];
-  sheetGuide.views = [{ showGridLines: true }];
 
   const numCols = schema.columns.length;
   const rowTotalColCount = schema.row_total_column ? 1 : 0;
@@ -555,7 +563,16 @@ export function buildComplexWorkbook(
     sheetInteractif.getColumn(c).width = 18;
   }
 
-  // --- ONGLET : FORMULES & GUIDE ---
+  // --- ONGLET(S) : DONNÉES DE RÉFÉRENCE (lookup tables) ---
+  if (schema.reference_tables && schema.reference_tables.length > 0) {
+    for (const refTable of schema.reference_tables) {
+      buildReferenceTableSheet(workbook, refTable, warnings);
+    }
+  }
+
+  // --- ONGLET : FORMULES & GUIDE (ajouté en dernier pour apparaître en fin de classeur) ---
+  const sheetGuide = workbook.addWorksheet("Formule & Guide");
+  sheetGuide.views = [{ showGridLines: true }];
 
   // L1 : Titre
   sheetGuide.mergeCells("A1:H1");
@@ -633,13 +650,6 @@ export function buildComplexWorkbook(
     sheetGuide.getColumn(c).width = 18;
   }
 
-  // --- ONGLET(S) : DONNÉES DE RÉFÉRENCE (lookup tables) ---
-  if (schema.reference_tables && schema.reference_tables.length > 0) {
-    for (const refTable of schema.reference_tables) {
-      buildReferenceTableSheet(workbook, refTable, warnings);
-    }
-  }
-
   return { workbook, warnings };
 }
 
@@ -652,20 +662,53 @@ function buildReferenceTableSheet(
   sheet.views = [{ showGridLines: true }];
 
   const numCols = refTable.headers.length;
+  const endColLetter = String.fromCharCode(64 + numCols);
 
-  // L1 : Titre
-  sheet.mergeCells(`A1:${String.fromCharCode(64 + numCols)}1`);
-  const titleCell = sheet.getCell("A1");
-  titleCell.value = refTable.name.toUpperCase();
-  titleCell.font = { name: "Segoe UI", size: 12, bold: true, color: { argb: WHITE } };
-  titleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: SLATE_900 } };
-  titleCell.alignment = { vertical: "middle", horizontal: "center" };
-  sheet.getRow(1).height = 28;
+  // ── Parser start_ref : "RefProduits!A1" ou "Feuille!B4" ──
+  // Contrat (route.ts) : start_ref pointe vers la cellule des EN-TÊTES de la
+  // table. Les données commencent à la ligne suivante. Si l'IA veut un titre
+  // et une description, elle DOIT placer start_ref à la ligne 3 (ex: "Feuille!A3").
+  const refMatch = refTable.start_ref.match(/^([A-Za-z0-9_]+)!([A-Z]{1,3})(\d+)$/);
+  if (!refMatch) {
+    warnings.push(`Table "${refTable.name}": start_ref "${refTable.start_ref}" invalide, ignoré`);
+    return;
+  }
+  const expectedSheetName = refMatch[1];
+  const expectedColLetter = refMatch[2];
+  const headerRowIdx = parseInt(refMatch[3], 10);
+  const expectedColIdx = expectedColLetter.charCodeAt(0) - 64; // 'A' = 1
 
-  // Description (si présente)
-  let startRowIdx = 3;
-  if (refTable.description) {
-    sheet.mergeCells(`A2:${String.fromCharCode(64 + numCols)}2`);
+  if (expectedSheetName !== refTable.sheet_name) {
+    warnings.push(
+      `Table "${refTable.name}": sheet_name=${refTable.sheet_name} mais start_ref pointe vers ${expectedSheetName}. ` +
+      `Les formules du tableau interactif risquent de ne pas trouver les données.`
+    );
+  }
+  if (expectedColLetter !== "A") {
+    warnings.push(
+      `Table "${refTable.name}": start_ref indique la colonne ${expectedColLetter} ` +
+      `mais cette implementation écrit les données à partir de la colonne A. ` +
+      `Les formules INDEX/MATCH utilisant $${expectedColLetter}$$${headerRowIdx} peuvent pointer vers une zone vide.`
+    );
+  }
+
+  // ── Titre + Description (uniquement s'il y a de la place AVANT start_ref) ──
+  // On écrit le titre en L1 et la description en L2 uniquement si start_ref
+  // est à la ligne >= 3. Sinon on saute pour ne pas collisionner avec les en-têtes.
+  if (headerRowIdx >= 3) {
+    // L1 : Titre
+    sheet.mergeCells(`A1:${endColLetter}1`);
+    const titleCell = sheet.getCell("A1");
+    titleCell.value = refTable.name.toUpperCase();
+    titleCell.font = { name: "Segoe UI", size: 12, bold: true, color: { argb: WHITE } };
+    titleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: SLATE_900 } };
+    titleCell.alignment = { vertical: "middle", horizontal: "center" };
+    sheet.getRow(1).height = 28;
+  }
+
+  if (headerRowIdx >= 3 && refTable.description) {
+    // L2 : Description
+    sheet.mergeCells(`A2:${endColLetter}2`);
     const descCell = sheet.getCell("A2");
     descCell.value = refTable.description;
     descCell.font = { name: "Segoe UI", size: 9, italic: true, color: { argb: SLATE_500 } };
@@ -673,12 +716,11 @@ function buildReferenceTableSheet(
     sheet.getRow(2).height = 18;
   }
 
-  // Headers
-  const headerRowIdx = startRowIdx;
+  // ── En-têtes à la position exacte donnée par start_ref ──
   const headerRow = sheet.getRow(headerRowIdx);
   headerRow.height = 22;
   for (let c = 0; c < numCols; c++) {
-    const cell = headerRow.getCell(1 + c);
+    const cell = headerRow.getCell(expectedColIdx + c);
     cell.value = refTable.headers[c];
     cell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: WHITE } };
     cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF334155" } };
@@ -691,46 +733,18 @@ function buildReferenceTableSheet(
     };
   }
 
-  // Vérification de cohérence avec start_ref
-  const refMatch = refTable.start_ref.match(/^([A-Za-z0-9_]+)!([A-Z]{1,3})(\d+)$/);
-  if (!refMatch) {
-    warnings.push(`Table "${refTable.name}": start_ref "${refTable.start_ref}" invalide, ignoré`);
-    return;
-  }
-  const expectedSheetName = refMatch[1];
-  const expectedColLetter = refMatch[2];
-  const expectedRowNum = parseInt(refMatch[3], 10);
+  // ── Données : commencent à start_ref + 1 ──
+  // C'est cette position que les formules INDEX/MATCH du tableau interactif
+  // DOIVENT référencer (ex: si start_ref="A1", données à A2, B2, C2...).
+  const actualStartRow = headerRowIdx + 1;
 
-  if (expectedSheetName !== refTable.sheet_name) {
-    warnings.push(
-      `Table "${refTable.name}": sheet_name=${refTable.sheet_name} mais start_ref pointe vers ${expectedSheetName}. ` +
-      `Les formules du tableau interactif risquent de ne pas trouver les données.`
-    );
-  }
-
-  // Décalage attendu entre la position attendue par les formules (start_ref)
-  // et la position réelle d'écriture (headerRowIdx + 1, car header = ligne 0 dans la table de référence)
-  const actualStartRow = headerRowIdx + 1; // 1ère ligne de données après header
-  const rowOffset = expectedRowNum - actualStartRow;
-  const actualStartCol = expectedColLetter.charCodeAt(0) - 64; // 'A' = 1
-  // On ne décale pas les colonnes (on suppose que la 1ère colonne = A, ce qui est standard)
-  // Si l'IA référence $I$10:$I$15 mais qu'on écrit en A4:A15, il y aura un mismatch → warning + on prévient
-  if (expectedColLetter !== "A") {
-    warnings.push(
-      `Table "${refTable.name}": start_ref indique la colonne ${expectedColLetter} ` +
-      `mais cette implementation écrit seulement en colonne A. Les formules INDEX/MATCH utilisant ` +
-      `$${expectedColLetter}$${expectedRowNum} peuvent pointer vers une zone vide.`
-    );
-  }
-
-  // Lignes de données
   for (let r = 0; r < refTable.rows.length; r++) {
     const row = sheet.getRow(actualStartRow + r);
     row.height = 20;
     const dataRow = refTable.rows[r];
 
     for (let c = 0; c < Math.min(numCols, dataRow.length); c++) {
-      const cell = row.getCell(1 + c);
+      const cell = row.getCell(expectedColIdx + c);
       const rawValue = dataRow[c];
       const colType = refTable.column_types?.[c] || "text";
 
@@ -762,26 +776,17 @@ function buildReferenceTableSheet(
     }
   }
 
-  // Largeurs colonnes
-  for (let c = 1; c <= numCols; c++) {
-    sheet.getColumn(c).width = 20;
+  // Largeurs colonnes (à partir de la 1ère colonne de la table)
+  for (let c = 0; c < numCols; c++) {
+    sheet.getColumn(expectedColIdx + c).width = 20;
   }
 
-  // Note explicative en bas
+  // Note explicative en bas (sous les données)
   const noteRowIdx = actualStartRow + refTable.rows.length + 1;
-  sheet.mergeCells(`A${noteRowIdx}:${String.fromCharCode(64 + numCols)}${noteRowIdx}`);
-  const noteCell = sheet.getCell(`A${noteRowIdx}`);
+  sheet.mergeCells(`${expectedColLetter}${noteRowIdx}:${endColLetter}${noteRowIdx}`);
+  const noteCell = sheet.getCell(`${expectedColLetter}${noteRowIdx}`);
   noteCell.value = `📋 Table de référence "${refTable.name}" — Les formules du tableau interactif pointent vers cette feuille (${refTable.sheet_name}).`;
   noteCell.font = { name: "Segoe UI", size: 9, italic: true, color: { argb: SLATE_500 } };
   noteCell.alignment = { vertical: "middle", horizontal: "left", wrapText: true };
   sheet.getRow(noteRowIdx).height = 18;
-
-  // Report d'un warning si décalage de lignes détecté
-  if (rowOffset !== 0) {
-    warnings.push(
-      `Table "${refTable.name}": les formules du tableau interactif référencent $${expectedColLetter}$${expectedRowNum} ` +
-      `mais les données ont été écrites à la ligne ${actualStartRow}. ` +
-      `Décalage de ${rowOffset} ligne(s) — les formules INDEX/MATCH risques de pointer vers la mauvaise plage.`
-    );
-  }
 }

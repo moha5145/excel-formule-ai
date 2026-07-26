@@ -292,15 +292,28 @@ TABLES DE RÉFÉRENCE (lookup tables) — quand les formules utilisent INDEX/MAT
       "description": "Table des produits par catégorie"
     }
   RÈGLES POUR LES TABLES DE RÉFÉRENCE :
-    1. "start_ref" DOIT pointer vers la colonne A de la feuille (ex: "MaFeuille!A1", "MaFeuille!A4").
-       Le builder écrit les données en colonne A. Si tu utilises une autre colonne dans start_ref,
-       les formules du tableau interactif risquent de pointer vers une zone vide.
+    1. "start_ref" DOIT pointer vers la COLONNE A et définir la LIGNE DES EN-TÊTES de la table.
+       Exemple : "MaFeuille!A1" → en-têtes lus à la ligne 1, données à partir de la ligne 2.
+       Exemple : "MaFeuille!A3" → en-têtes lus à la ligne 3, données à partir de la ligne 4
+                  (laisse les lignes 1 et 2 pour un titre et une description optionnels).
+       ATTENTION : le builder n'écrit PAS de titre/description si start_ref est à la ligne 1 ou 2
+                   (pas assez de place). Place start_ref à la ligne 3 minimum pour en bénéficier.
     2. "sheet_name" doit être unique dans le schéma (chaque table a sa propre feuille).
     3. Les "rows" ne doivent pas dépasser "headers.length" colonnes.
-    4. Les formules du tableau interactif qui utilisent INDEX/MATCH doivent référencer la zone EXACTE
-       couverte par start_ref + headers + rows. Par exemple, si start_ref="Produits!A1" et headers a 3 colonnes
-       et rows a 6 lignes, la zone est Produits!A1:C6.
-       Référence dans la formule : =INDEX(Produits!$C$1:$C$6, MATCH(D{row}, Produits!$B$1:$B$6, 0))
+    4. ⚠️ COHÉRENCE OBLIGATOIRE start_ref ↔ formules INDEX/MATCH :
+       Les formules du tableau interactif doivent référencer la zone EXACTE couverte par les en-têtes
+       + données, qui commence à start_ref (en-têtes) et continue une ligne en dessous (données).
+       Si start_ref="Produits!A1" et headers a 3 colonnes et rows a 5 lignes :
+         - En-têtes occupent Produits!A1:C1 (à start_ref)
+         - Données  occupent Produits!A2:C6 (de start_ref+1 à start_ref+rows.length)
+         - La formule INDEX/MATCH doit pointer vers les DONNÉES (pas les en-têtes) :
+           =INDEX(Produits!$C$2:$C$6, MATCH(D{row}, Produits!$B$2:$B$6, 0))
+                  ↑                                                           ↑
+                  données commencent à start_ref+1 (=ligne 2 si start_ref=A1)
+       ERREUR CLASSIQUE À ÉVITER : écrire start_ref="A3" (en-têtes ligne 3, données ligne 4-...)
+       mais garder des formules qui référencent $B$2:$B$6 → les formules pointeront vers la
+       zone titre/description et renverront Err :508 / #N/A. **Toujours** caler start_ref et
+       les références $...$X$Y en même temps.
   EXEMPLE — Liste déroulante dynamique (Commande avec Lookup Produits) :
     Schéma attendu :
     <!-- TABLE_SCHEMA: {
@@ -339,8 +352,11 @@ TABLES DE RÉFÉRENCE (lookup tables) — quand les formules utilisent INDEX/MAT
         }
       ]
     } -->
-    Note : La 1ère ligne de la feuille est réservée pour le titre + headers (écrits par le builder à partir de start_ref).
-    Les données commencent à la ligne suivante. Vérifie la cohérence entre start_ref et les références absolues dans tes formules.
+    Note : La feuille de référence est écrite comme ceci : optionnellement un titre en L1,
+    optionnellement une description courte en L2 (uniquement si start_ref >= ligne 3),
+    puis les en-têtes à la ligne EXACTE donnée par start_ref, et les données à partir de
+    start_ref+1. Vérifie TOUJOURS la cohérence entre start_ref et les références absolues
+    $...$X$Y dans tes formules INDEX/MATCH (voir règle 4 ci-dessus).
 
 QUAND UTILISER le mode complexe (général, n'importe quel domaine) :
   - Demandes nécessitant PLUS D'1 colonne calculée (formules distinctes par colonne)
