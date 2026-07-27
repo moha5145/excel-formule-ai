@@ -1,6 +1,6 @@
 import ExcelJS from "exceljs";
 import { type TableSchema, type TableColumn, type ReferenceTable } from "./schemaParser";
-import { type ExportFormat, resolveFormulaTemplate } from "./postProcessFormula";
+import { type ExportFormat, resolveFormulaTemplate, convertToUsInvariant } from "./postProcessFormula";
 import { extractTables } from "../excelExport";
 
 interface BuildResult {
@@ -84,7 +84,11 @@ function resolveColumnFormula(
   let isAlreadyEnglish = false;
 
   if (col.formula_en && col.formula_en.startsWith("=")) {
-    template = col.formula_en;
+    // formula_en est censée être en anglais, MAIS l'IA insère parfois des ';'
+    // (séparateurs français) par erreur, même dans ce champ. On normalise les
+    // séparateurs vers ',' avant de marquer la formule comme déjà anglaise,
+    // pour éviter Err:508 dans LibreOffice (parenthèse manquante).
+    template = convertToUsInvariant(col.formula_en, format);
     isAlreadyEnglish = true;
   } else if (col.formula && col.formula.startsWith("=")) {
     warnings.push(
@@ -102,6 +106,8 @@ function resolveColumnFormula(
     template = template.replace(/\{row-1\}/g, String(row - 1));
   }
 
+  // isAlreadyEnglish=true : resolveFormulaTemplate ne relance pas convertToUsInvariant
+  // (déjà fait ci-dessus), mais exécute bien postProcessFormula (_xlfn, XLOOKUP→INDEX/MATCH).
   return resolveFormulaTemplate(template, row, format, isAlreadyEnglish);
 }
 

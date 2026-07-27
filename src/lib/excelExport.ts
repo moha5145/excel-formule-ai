@@ -805,6 +805,7 @@ export async function patchWorkbookForceCalc(workbook: ExcelJS.Workbook): Promis
   const rawBuffer = await workbook.xlsx.writeBuffer();
   const zip = await JSZip.loadAsync(rawBuffer);
 
+  // 1. Patch feuilles : ca="1" sur chaque cellule à formule (recalcul à l'ouverture)
   for (const filename of Object.keys(zip.files)) {
     if (filename.startsWith("xl/worksheets/sheet") && filename.endsWith(".xml")) {
       let xml = await zip.file(filename)!.async("string");
@@ -815,6 +816,30 @@ export async function patchWorkbookForceCalc(workbook: ExcelJS.Workbook): Promis
       });
       zip.file(filename, xml);
     }
+  }
+
+  // 2. Patch workbook.xml : forcer calcMode="auto" + fullCalcOnLoad="1"
+  //    LibreOffice lit ces attributs pour décider si recalculer au chargement.
+  //    Sans ça, des formules cross-sheet (ex: INDEX/EQUIV vers RefProduits)
+  //    peuvent afficher Err:508 jusqu'à ce qu'on touche manuellement une cellule.
+  const wbFile = zip.file("xl/workbook.xml");
+  if (wbFile) {
+    let wbXml = await wbFile.async("string");
+    // Remplacer ou insérer l'élément <calcPr .../>
+    if (/<calcPr\b/.test(wbXml)) {
+      // Met à jour les attributs existants
+      wbXml = wbXml.replace(/<calcPr([^/]*)\/>/, (_m, attrs: string) => {
+        let a = attrs;
+        a = /calcMode=/.test(a) ? a.replace(/calcMode="[^"]*"/, 'calcMode="auto"') : a + ' calcMode="auto"';
+        a = /fullCalcOnLoad=/.test(a) ? a.replace(/fullCalcOnLoad="[^"]*"/, 'fullCalcOnLoad="1"') : a + ' fullCalcOnLoad="1"';
+        return `<calcPr${a}/>`;
+      });
+    } else {
+      // Aucun élément calcPr : l'insérer avant </workbookPr> ou avant </workbook>
+      const insertBefore = wbXml.includes("</workbookPr>") ? "</workbookPr>" : "</workbook>";
+      wbXml = wbXml.replace(insertBefore, `<calcPr calcMode="auto" fullCalcOnLoad="1"/>${insertBefore}`);
+    }
+    zip.file("xl/workbook.xml", wbXml);
   }
 
   const patchedBuffer = await zip.generateAsync({ type: "nodebuffer" });
