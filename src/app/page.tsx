@@ -5,7 +5,6 @@ import { toast } from "sonner";
 import { ApiKeyModal } from "@/components/ApiKeyModal";
 import { FormulaInputBar, FormulaResultArea, type GenerationMode } from "@/components/FormulaAssistant";
 import { AppSidebar } from "@/components/AppSidebar";
-import { FileUpload } from "@/components/FileUpload";
 import { Menu, Copy, FileSpreadsheet, ChevronDown, Code2, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -167,7 +166,6 @@ export default function Home() {
     fileName: string;
     textRepresentation: string;
   } | null>(null);
-  const [fileUploadKey, setFileUploadKey] = useState(0);
 
   const checkCoffeeToast = useCallback((currentCount: number) => {
     if (currentCount === 3 || currentCount === 8 || (currentCount > 8 && (currentCount - 8) % 8 === 0)) {
@@ -438,7 +436,6 @@ export default function Home() {
     } finally {
       setLoading(false);
       setFileContext(null);
-      setFileUploadKey((k) => k + 1);
     }
   }, [prompt, loading, apiKey, dailyFreeRemaining, fileContext, messages, modelChoice, exportFormat, generationMode, currentConversationId, setCurrentConversationId, setHistory, checkCoffeeToast]);
 
@@ -641,14 +638,6 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="px-3 pb-2 sm:px-6 max-w-4xl w-full mx-auto flex-shrink-0 z-40">
-          <FileUpload
-            key={fileUploadKey}
-            onFileParsed={setFileContext}
-            disabled={loading}
-          />
-        </div>
-
         <FormulaInputBar
           prompt={prompt}
           onPromptChange={setPrompt}
@@ -670,6 +659,8 @@ export default function Home() {
           onFormatChange={setExportFormat}
           generationMode={generationMode}
           onGenerationModeChange={setGenerationMode}
+          fileContext={fileContext}
+          onFileSelect={setFileContext}
         />
       </main>
     </div>

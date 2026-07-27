@@ -1,10 +1,15 @@
 "use client";
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Loader2, Copy, Check, Wand2, Undo2, Zap, Brain, Key, Download, FileSpreadsheet, FileType, RefreshCw, Code2, Table } from "lucide-react";
+import { Loader2, Copy, Check, Wand2, Undo2, Zap, Brain, Key, Download, FileSpreadsheet, FileType, RefreshCw, Code2, Table, Plus, X, Upload } from "lucide-react";
 import type { ExportFormat } from "@/lib/excelExport";
 
 export type GenerationMode = "formula_only" | "simple_table" | "complex_table";
+
+interface FileContext {
+  fileName: string;
+  textRepresentation: string;
+}
 
 export const FORMULA_EXAMPLES: { label: string; keywords: string }[] = [
   { label: "Sélectionnez un exemple rapide...", keywords: "" },
@@ -49,6 +54,8 @@ interface FormulaInputBarProps {
   onFormatChange: (format: ExportFormat) => void;
   generationMode: GenerationMode;
   onGenerationModeChange: (mode: GenerationMode) => void;
+  fileContext: FileContext | null;
+  onFileSelect: (file: FileContext | null) => void;
 }
 
 export function FormulaInputBar({
@@ -70,11 +77,59 @@ export function FormulaInputBar({
   onFormatChange,
   generationMode,
   onGenerationModeChange,
+  fileContext,
+  onFileSelect,
 }: FormulaInputBarProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedExampleIndex, setSelectedExampleIndex] = useState(0);
   const [selectedExampleLabel, setSelectedExampleLabel] = useState<string | null>(null);
   const [exampleMenuOpen, setExampleMenuOpen] = useState(false);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [fileLoading, setFileLoading] = useState(false);
+
+  const handleFile = useCallback(async (f: File) => {
+    setFileError(null);
+    const ext = f.name.split('.').pop()?.toLowerCase();
+    if (!ext || !['xlsx', 'xls', 'csv'].includes(ext)) {
+      setFileError('Format accepté : .xlsx, .xls, .csv');
+      return;
+    }
+    if (f.size > 10 * 1024 * 1024) {
+      setFileError('Fichier trop volumineux (max 10 Mo)');
+      return;
+    }
+    setFileLoading(true);
+    try {
+      const { parseFile } = await import('@/lib/fileParser');
+      const result = await parseFile(f);
+      onFileSelect({
+        fileName: f.name,
+        textRepresentation: result.textRepresentation,
+      });
+    } catch {
+      setFileError('Erreur lors de la lecture du fichier');
+      onFileSelect(null);
+    } finally {
+      setFileLoading(false);
+    }
+  }, [onFileSelect]);
+
+  const handleFileChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (loading) return;
+      const f = e.target.files?.[0];
+      if (f) handleFile(f);
+      // Reset l'input pour permettre de re-sélectionner le même fichier
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    },
+    [handleFile, loading]
+  );
+
+  const handleRemoveFile = useCallback(() => {
+    onFileSelect(null);
+    setFileError(null);
+  }, [onFileSelect]);
 
   // Auto-resize textarea logic
   useEffect(() => {
@@ -121,6 +176,29 @@ export function FormulaInputBar({
 
         {/* Input area bubble */}
         <div className="relative flex flex-col bg-card border border-border/40 rounded-2xl p-2 sm:p-2.5 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 transition-all">
+          {/* Fichier importé : chip au-dessus du textarea */}
+          {fileContext && (
+            <div className="flex items-center gap-2 mb-1.5 px-1 rounded-lg border border-emerald-200 bg-emerald-50 dark:border-emerald-800/50 dark:bg-emerald-950/20 py-1">
+              <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span className="flex-1 truncate text-xs text-emerald-700 dark:text-emerald-300 font-medium">
+                {fileContext.fileName}
+              </span>
+              <button
+                type="button"
+                onClick={handleRemoveFile}
+                className="rounded p-0.5 text-emerald-500 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors shrink-0"
+                title="Retirer le fichier"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+          {fileError && (
+            <div className="flex items-center gap-1.5 px-3 py-0.5 mb-1 text-[11px] text-destructive">
+              <X className="h-3 w-3 shrink-0" />
+              {fileError}
+            </div>
+          )}
           <textarea
             id="prompt-input"
             ref={textareaRef}
@@ -133,8 +211,38 @@ export function FormulaInputBar({
           />
 
           <div className="flex flex-wrap items-center justify-between mt-1.5 sm:mt-2 pt-1.5 sm:pt-2 border-t border-border/60 px-0.5 sm:px-1 gap-1.5 sm:gap-2">
-            {/* Left actions: Model choice, Format, Enhance */}
+            {/* Left actions: Upload, Model choice, Format, Enhance */}
             <div className="flex items-center gap-1.5 sm:gap-2">
+              {/* Bouton d'upload fichier Excel intégré */}
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={loading || fileLoading}
+                className={`h-8 w-9 sm:w-auto sm:px-2 rounded-lg border border-border/60 text-[11px] font-medium flex items-center justify-center gap-1 transition-all shrink-0 ${
+                  fileContext
+                    ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/50 text-emerald-600 dark:text-emerald-400"
+                    : `text-muted-foreground hover:text-foreground hover:border-primary/30 hover:bg-muted/30 ${(loading || fileLoading) ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`
+                }`}
+                title={fileContext ? "Fichier chargé — cliquer pour changer" : "Joindre un fichier Excel (.xlsx, .csv)"}
+                disabled={loading || fileLoading}
+              >
+                {fileLoading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Plus className="h-3.5 w-3.5" />
+                )}
+                {fileContext && (
+                  <span className="hidden sm:inline text-xs truncate max-w-[80px]">{fileContext.fileName}</span>
+                )}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                className="hidden"
+                onChange={handleFileChange}
+                disabled={loading || fileLoading}
+              />
               <div className="flex items-center gap-1 bg-muted/80 border border-border p-0.5 rounded-lg text-xs">
                 <select
                   value={format}
