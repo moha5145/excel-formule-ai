@@ -6,7 +6,8 @@ import { ApiKeyModal } from "@/components/ApiKeyModal";
 import { FormulaInputBar, FormulaResultArea, type GenerationMode } from "@/components/FormulaAssistant";
 import { AppSidebar } from "@/components/AppSidebar";
 import { FileUpload } from "@/components/FileUpload";
-import { Menu, Copy, FileSpreadsheet } from "lucide-react";
+import { Menu, Copy, FileSpreadsheet, ChevronDown, Code2, Check } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import type { ExportFormat } from "@/lib/excelExport";
 import { downloadFormulaAsExcel, normalizeTablesInResponse } from "@/lib/excelExport";
@@ -21,6 +22,84 @@ function applyModeOverride(content: string, requested: GenerationMode): { conten
   const overridden = m[1] as GenerationMode;
   if (requested === "formula_only") return { content: content.replace(MODE_OVERRIDE_RE, ""), effectiveMode: "formula_only" };
   return { content: content.replace(MODE_OVERRIDE_RE, ""), effectiveMode: overridden };
+}
+
+function parseMessageContent(content: string) {
+  const schemaMatch = content.match(/<!--\s*TABLE_SCHEMA:\s*(\{[\s\S]*?\})\s*-->/);
+  const schemaJsonRaw = schemaMatch ? schemaMatch[1].trim() : null;
+
+  const displayMarkdown = content
+    .replace(/<!--\s*TABLE_SCHEMA:[\s\S]*?-->/g, "")
+    .replace(/<!--\s*FORMULA_EN:[\s\S]*?-->/g, "")
+    .replace(/<!--\s*PARAM[\s\S]*?-->/g, "")
+    .replace(/<!--\s*MODE_OVERRIDE:[\s\S]*?-->/g, "")
+    .trim();
+
+  return {
+    displayMarkdown,
+    schemaJsonRaw,
+  };
+}
+
+function JsonSchemaCollapsible({ jsonRaw }: { jsonRaw: string }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  let formatted = jsonRaw;
+  try {
+    const parsed = JSON.parse(jsonRaw);
+    formatted = JSON.stringify(parsed, null, 2);
+  } catch {
+    // Keep raw if parse fails
+  }
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(formatted);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+    toast.success("Schéma JSON copié !");
+  };
+
+  return (
+    <div className="mt-3 border border-border/60 rounded-xl bg-card/60 overflow-hidden text-xs not-prose">
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        className="w-full px-3.5 py-2.5 text-left font-medium text-muted-foreground hover:text-foreground flex items-center justify-between select-none bg-muted/30 hover:bg-muted/60 transition-colors cursor-pointer"
+        aria-expanded={isOpen}
+      >
+        <span className="flex items-center gap-2 text-xs font-medium">
+          <Code2 className="w-4 h-4 text-primary shrink-0" />
+          <span>Données techniques (Schéma JSON)</span>
+        </span>
+        <div className="flex items-center gap-1.5 text-[11px]">
+          <span className="text-[10px] text-muted-foreground">{isOpen ? "Masquer" : "Afficher"}</span>
+          <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />
+        </div>
+      </button>
+
+      {isOpen && (
+        <div className="p-3 bg-muted/80 border-t border-border/40 flex flex-col gap-2 animate-in fade-in duration-200">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-mono text-muted-foreground">JSON Schema (tableau complexe)</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCopy}
+              className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 cursor-pointer"
+            >
+              {copied ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
+              <span>{copied ? "Copié" : "Copier le JSON"}</span>
+            </Button>
+          </div>
+          <pre className="p-2.5 bg-background/90 rounded-lg overflow-x-auto text-[11px] font-mono text-foreground/90 max-h-64 border border-border/40 select-all leading-relaxed">
+            {formatted}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function normalizeMarkdownBlocks(markdown: string) {
@@ -153,8 +232,8 @@ export default function Home() {
 
   const handleDownload = useCallback((content: string) => {
     if (!content) return;
-    const cleanContent = content.replace(/<!--\s*TABLE_SCHEMA:[\s\S]*?-->\s*$/, "");
-    const blob = new Blob([cleanContent], { type: "text/plain;charset=utf-8" });
+    const { displayMarkdown } = parseMessageContent(content);
+    const blob = new Blob([displayMarkdown], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -480,67 +559,76 @@ export default function Home() {
               </div>
             ) : (
               <div className="w-full max-w-4xl mx-auto flex flex-col gap-4">
-                {messages.map((msg, idx) => (
-                  <div key={idx} className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}>
-                    <div className={`max-w-[85%] px-4 py-3 rounded-2xl ${msg.role === "user"
-                        ? "bg-primary/20 border border-primary/30 text-foreground text-sm"
-                        : "bg-muted/80 border border-border/50 text-sm prose dark:prose-invert prose-p:text-foreground/80 prose-a:text-primary hover:prose-a:text-yellow-400 prose-strong:text-foreground prose-li:text-foreground/80 max-w-none"
-                      }`}>
-                      {msg.role === "model" ? (
-                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
-                          pre({ children, className }: { children?: ReactNode; className?: string }) {
-                            return (
-                              <pre className={`relative p-3 my-2 overflow-x-auto bg-muted border border-border rounded-xl text-yellow-300 font-mono text-xs shadow-inner ${className || ""}`}>
-                                <button
-                                  onClick={() => navigator.clipboard.writeText(String(children))}
-                                  className="absolute top-2 right-2 p-1.5 rounded-lg bg-muted/80 border border-border/50 text-muted-foreground hover:text-yellow-300 hover:bg-muted transition-all"
-                                  aria-label="Copier la formule"
-                                >
-                                  <Copy size={12} />
-                                </button>
-                                {children}
-                              </pre>
-                            );
-                          },
-                          code({ inline, className, children }: { inline?: boolean; className?: string; children?: ReactNode }) {
-                            if (inline) {
-                              return <code className={`bg-muted text-yellow-200 px-1.5 py-0.5 rounded-md text-xs font-mono ${className || ""}`}>{children}</code>;
-                            }
-                            return <code className={className}>{children}</code>;
-                          },
-                        }}>
-                          {normalizeMarkdownBlocks(msg.content)}
-                        </ReactMarkdown>
-                      ) : (
-                        <div className="flex flex-col gap-1.5">
-                          {msg.fileName && (
-                            <div className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
-                              <FileSpreadsheet className="h-3.5 w-3.5 shrink-0" />
-                              <span className="truncate">{msg.fileName}</span>
-                            </div>
-                          )}
-                          <p className="whitespace-pre-wrap">{msg.content}</p>
-                        </div>
+                {messages.map((msg, idx) => {
+                  const { displayMarkdown, schemaJsonRaw } = msg.role === "model"
+                    ? parseMessageContent(msg.content)
+                    : { displayMarkdown: msg.content, schemaJsonRaw: null };
+
+                  return (
+                    <div key={idx} className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start w-full"}`}>
+                      <div className={`${msg.role === "user"
+                          ? "max-w-[85%] px-4 py-3 rounded-2xl bg-primary/20 border border-primary/30 text-foreground text-sm"
+                          : "w-full px-4 py-3 rounded-2xl bg-muted/80 border border-border/50 text-sm prose dark:prose-invert prose-p:text-foreground/80 prose-a:text-primary hover:prose-a:text-yellow-400 prose-strong:text-foreground prose-li:text-foreground/80 max-w-none"
+                        }`}>
+                        {msg.role === "model" ? (
+                          <>
+                            <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+                              pre({ children, className }: { children?: ReactNode; className?: string }) {
+                                return (
+                                  <pre className={`relative p-3 my-2 overflow-x-auto bg-muted border border-border rounded-xl text-yellow-300 font-mono text-xs shadow-inner ${className || ""}`}>
+                                    <button
+                                      onClick={() => navigator.clipboard.writeText(String(children))}
+                                      className="absolute top-2 right-2 p-1.5 rounded-lg bg-muted/80 border border-border/50 text-muted-foreground hover:text-yellow-300 hover:bg-muted transition-all"
+                                      aria-label="Copier la formule"
+                                    >
+                                      <Copy size={12} />
+                                    </button>
+                                    {children}
+                                  </pre>
+                                );
+                              },
+                              code({ inline, className, children }: { inline?: boolean; className?: string; children?: ReactNode }) {
+                                if (inline) {
+                                  return <code className={`bg-muted text-yellow-200 px-1.5 py-0.5 rounded-md text-xs font-mono ${className || ""}`}>{children}</code>;
+                                }
+                                return <code className={className}>{children}</code>;
+                              },
+                            }}>
+                              {normalizeMarkdownBlocks(displayMarkdown)}
+                            </ReactMarkdown>
+                            {schemaJsonRaw && <JsonSchemaCollapsible jsonRaw={schemaJsonRaw} />}
+                          </>
+                        ) : (
+                          <div className="flex flex-col gap-1.5">
+                            {msg.fileName && (
+                              <div className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
+                                <FileSpreadsheet className="h-3.5 w-3.5 shrink-0" />
+                                <span className="truncate">{msg.fileName}</span>
+                              </div>
+                            )}
+                            <p className="whitespace-pre-wrap">{msg.content}</p>
+                          </div>
+                        )}
+                      </div>
+                      {msg.role === "model" && (
+                        <FormulaResultArea
+                          response={msg.content}
+                          loading={loading && idx === messages.length - 1}
+                          copied={copiedIdx === idx}
+                          onCopy={() => handleCopy(msg.content, idx)}
+                          onDownload={() => handleDownload(msg.content)}
+                          onDownloadExcel={() => handleDownloadExcel(msg.content, msg.userPrompt || "", msg.generationMode)}
+                          onRegenerate={() => {
+                            const userMsg = msg.userPrompt;
+                            const fallback = userMsg || messages.slice(0, idx).reverse().find(m => m.role === "user")?.content || "";
+                            handleGenerate(fallback);
+                          }}
+                          generationMode={msg.generationMode || "formula_only"}
+                        />
                       )}
                     </div>
-                    {msg.role === "model" && (
-                      <FormulaResultArea
-                        response={msg.content}
-                        loading={loading && idx === messages.length - 1}
-                        copied={copiedIdx === idx}
-                        onCopy={() => handleCopy(msg.content, idx)}
-                        onDownload={() => handleDownload(msg.content)}
-                        onDownloadExcel={() => handleDownloadExcel(msg.content, msg.userPrompt || "", msg.generationMode)}
-                        onRegenerate={() => {
-                          const userMsg = msg.userPrompt;
-                          const fallback = userMsg || messages.slice(0, idx).reverse().find(m => m.role === "user")?.content || "";
-                          handleGenerate(fallback);
-                        }}
-                        generationMode={msg.generationMode || "formula_only"}
-                      />
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
                 {loading && (
                   <div className="flex justify-start">
                     <div className="bg-loading-bg border border-loading-border text-loading-text text-sm prose max-w-none px-4 py-3 rounded-2xl animate-pulse">
