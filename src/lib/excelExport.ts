@@ -363,10 +363,13 @@ export async function downloadFormulaAsExcel(
   format: ExportFormat = "libreoffice-fr",
   mode?: "formula_only" | "simple_table" | "complex_table"
 ): Promise<{ warnings: string[] }> {
-  // Only explicit complex mode (or auto-overridden to complex) may use the TABLE_SCHEMA path.
-  // simple_table/formula_only skip it entirely — even if the LLM leaked a malformed schema comment,
-  // we fall back to the plain path so users never see "Schema de tableau complexe invalide".
-  if (mode === "complex_table" && isComplexResponse(response)) {
+  // Auto-détection du mode complexe : si la réponse contient un TABLE_SCHEMA valide et que le mode
+  // n'est PAS formula_only, on utilise le chemin complexe — même si l'UI était en simple_table.
+  // L'IA auto-bascule parfois en mode complex (MODE_OVERRIDE) sans que le mode UI soit mis à jour,
+  // ce qui causerait des résultats à 0 ou des cellules décalées dans le chemin simple.
+  // On garde le guard formula_only pour éviter les faux positifs sur des réponses textuelles pures.
+  const shouldTryComplex = mode !== "formula_only" && isComplexResponse(response);
+  if (shouldTryComplex) {
     const rawSchema = extractTableSchema(response);
     if (rawSchema === null) {
       console.warn("TABLE_SCHEMA détecté mais JSON illisible, fallback mode simple");
