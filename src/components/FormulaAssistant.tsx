@@ -148,11 +148,10 @@ export function FormulaInputBar({
           <button
             type="button"
             onClick={() => onGenerationModeChange("formula_only")}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg transition-all text-xs font-medium cursor-pointer whitespace-nowrap ${
-              generationMode === "formula_only"
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg transition-all text-xs font-medium cursor-pointer whitespace-nowrap ${generationMode === "formula_only"
                 ? "bg-background text-foreground shadow-xs border border-border/60"
                 : "text-muted-foreground hover:text-foreground"
-            }`}
+              }`}
             title="Générer uniquement la formule avec explication (rapide, sans tableau)"
           >
             <Code2 size={13} className={generationMode === "formula_only" ? "text-primary" : ""} />
@@ -162,11 +161,10 @@ export function FormulaInputBar({
           <button
             type="button"
             onClick={() => onGenerationModeChange("simple_table")}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg transition-all text-xs font-medium cursor-pointer whitespace-nowrap ${
-              generationMode !== "formula_only"
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg transition-all text-xs font-medium cursor-pointer whitespace-nowrap ${generationMode !== "formula_only"
                 ? "bg-background text-foreground shadow-xs border border-border/60"
                 : "text-muted-foreground hover:text-foreground"
-            }`}
+              }`}
             title="Formule + tableau d'exemple. L'IA choisit automatiquement un tableau simple ou une simulation complexe selon votre demande."
           >
             <Table size={13} className={generationMode !== "formula_only" ? "text-primary" : ""} />
@@ -218,13 +216,11 @@ export function FormulaInputBar({
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={loading || fileLoading}
-                className={`h-8 w-9 sm:w-auto sm:px-2 rounded-lg border border-border/60 text-[11px] font-medium flex items-center justify-center gap-1 transition-all shrink-0 ${
-                  fileContext
+                className={`h-8 w-9 sm:w-auto sm:px-2 rounded-lg border border-border/60 text-[11px] font-medium flex items-center justify-center gap-1 transition-all shrink-0 ${fileContext
                     ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/50 text-emerald-600 dark:text-emerald-400"
                     : `text-muted-foreground hover:text-foreground hover:border-primary/30 hover:bg-muted/30 ${(loading || fileLoading) ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`
-                }`}
+                  }`}
                 title={fileContext ? "Fichier chargé — cliquer pour changer" : "Joindre un fichier Excel (.xlsx, .csv)"}
-                disabled={loading || fileLoading}
               >
                 {fileLoading ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -410,7 +406,8 @@ export function FormulaResultArea({
   }, [response]);
 
   return (
-    <div ref={resultRef} className="w-full flex flex-col gap-3 animate-in fade-in duration-300">
+    <div ref={resultRef} className="w-full flex flex-col gap-3 mt-3
+     animate-in fade-in duration-300">
       <div className="flex items-start gap-2 sm:gap-3 p-3 bg-muted/40 rounded-xl border border-border/50">
         <span className="text-yellow-500 text-sm flex-shrink-0">⚠️</span>
         <p className="text-[10px] sm:text-[11px] text-muted-foreground leading-relaxed">
@@ -444,11 +441,10 @@ export function FormulaResultArea({
         <Button
           variant="outline"
           onClick={onCopy}
-          className={`min-w-0 border-border rounded-xl transition-all h-9 px-2 sm:px-3 text-[11px] sm:text-xs cursor-pointer focus-visible:outline-none sm:flex-1 ${
-            generationMode === "formula_only"
+          className={`min-w-0 border-border rounded-xl transition-all h-9 px-2 sm:px-3 text-[11px] sm:text-xs cursor-pointer focus-visible:outline-none sm:flex-1 ${generationMode === "formula_only"
               ? "bg-primary text-primary-foreground hover:bg-primary/90 border-primary font-medium"
               : "bg-btn-outline-bg hover:bg-btn-outline-hover text-foreground"
-          }`}
+            }`}
         >
           {copied ? (
             <><Check size={14} className={generationMode === "formula_only" ? "text-white mr-1 sm:mr-1.5 flex-shrink-0" : "text-green-500 mr-1 sm:mr-1.5 flex-shrink-0"} /> Copié</>
