@@ -290,7 +290,7 @@ export function buildComplexWorkbook(
   // Headers du tableau de données
   const startRow = schema.data_start_row || 10;
   const headerRow = sheetInteractif.getRow(startRow);
-  headerRow.height = 24;
+  headerRow.height = 36;
 
   const bHeader = headerRow.getCell(2); // Colonne B "Ligne"
   bHeader.value = "Ligne";
@@ -309,7 +309,7 @@ export function buildComplexWorkbook(
     cell.value = schema.columns[c].header;
     cell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: WHITE } };
     cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF334155" } };
-    cell.alignment = { horizontal: "center", vertical: "middle" };
+    cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
     cell.border = {
       top: { style: "thin", color: { argb: "FF475569" } },
       bottom: { style: "medium", color: { argb: "FF1E293B" } },
@@ -327,7 +327,7 @@ export function buildComplexWorkbook(
     cell.value = rowTotal.header;
     cell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: WHITE } };
     cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E293B" } };
-    cell.alignment = { horizontal: "center", vertical: "middle" };
+    cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
     cell.border = {
       top: { style: "thin", color: { argb: "FF475569" } },
       bottom: { style: "medium", color: { argb: "FF1E293B" } },
@@ -730,7 +730,7 @@ function buildReferenceTableSheet(
     cell.value = refTable.headers[c];
     cell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: WHITE } };
     cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF334155" } };
-    cell.alignment = { horizontal: "center", vertical: "middle" };
+    cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
     cell.border = {
       top: { style: "thin", color: { argb: "FF475569" } },
       bottom: { style: "medium", color: { argb: "FF1E293B" } },

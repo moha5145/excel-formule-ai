@@ -606,7 +606,7 @@ export async function downloadFormulaAsExcel(
       const cell = simHeaderRow.getCell(colIdx);
       cell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: WHITE } };
       cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF334155" } };
-      cell.alignment = { horizontal: "center", vertical: "middle" };
+      cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
       cell.border = {
         top: { style: "thin", color: { argb: "FF475569" } },
         bottom: { style: "medium", color: { argb: "FF1E293B" } },
@@ -712,7 +712,7 @@ export async function downloadFormulaAsExcel(
             } else {
               cell.value = param.rawValue;
             }
-            cell.alignment = { horizontal: "center", vertical: "middle" };
+            cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
           } else if (param.type === "percentage") {
             cell.value = param.value;
             cell.numFmt = '0.00%';

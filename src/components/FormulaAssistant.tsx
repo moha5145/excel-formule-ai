@@ -1,7 +1,7 @@
 "use client";
 import { useRef, useEffect, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Loader2, Copy, Check, Wand2, Undo2, Zap, Download, FileSpreadsheet, RefreshCw, Code2, Table, Plus, X } from "lucide-react";
+import { Loader2, Copy, Check, Wand2, Undo2, Zap, Download, FileSpreadsheet, RefreshCw, Code2, Table, Plus, X, FileText } from "lucide-react";
 import type { ExportFormat } from "@/lib/excelExport";
 
 export type GenerationMode = "formula_only" | "simple_table" | "complex_table";
@@ -82,6 +82,19 @@ export function FormulaInputBar({
   const [exampleMenuOpen, setExampleMenuOpen] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
   const [fileLoading, setFileLoading] = useState(false);
+  const [uploadMenuOpen, setUploadMenuOpen] = useState(false);
+  const [fileAccept, setFileAccept] = useState(".xlsx,.xls,.csv");
+  const fileAcceptRef = useRef<string>(".xlsx,.xls,.csv");
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setUploadMenuOpen(false);
+    };
+    if (uploadMenuOpen) {
+      document.addEventListener("keydown", handleKeyDown);
+    }
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [uploadMenuOpen]);
 
   const handleFile = useCallback(async (f: File) => {
     setFileError(null);
@@ -206,34 +219,93 @@ export function FormulaInputBar({
           <div className="flex flex-wrap items-center justify-between mt-1.5 sm:mt-2 pt-1.5 sm:pt-2 border-t border-border/60 px-0.5 sm:px-1 gap-1.5 sm:gap-2">
             {/* Left actions: Upload, Model choice, Format, Enhance */}
             <div className="flex items-center gap-1.5 sm:gap-2">
-              {/* Bouton d'upload fichier Excel intégré */}
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={loading || fileLoading}
-                className={`h-8 w-9 sm:w-auto sm:px-2 rounded-lg border border-border/60 text-[11px] font-medium flex items-center justify-center gap-1 transition-all shrink-0 ${fileContext
-                    ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/50 text-emerald-600 dark:text-emerald-400"
-                    : `text-muted-foreground hover:text-foreground hover:border-primary/30 hover:bg-muted/30 ${(loading || fileLoading) ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`
-                  }`}
-                title={fileContext ? "Fichier chargé — cliquer pour changer" : "Joindre un fichier Excel (.xlsx, .csv)"}
-              >
-                {fileLoading ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Plus className="h-3.5 w-3.5" />
+              {/* Bouton d'upload fichier Excel/CSV avec menu déroulant */}
+              <div className="relative inline-flex items-center">
+                <button
+                  type="button"
+                  onClick={() => setUploadMenuOpen(!uploadMenuOpen)}
+                  disabled={loading || fileLoading}
+                  className={`h-8 w-9 sm:w-auto sm:px-2 rounded-lg border border-border/60 text-[11px] font-medium flex items-center justify-center gap-1 transition-all shrink-0 ${fileContext
+                      ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/50 text-emerald-600 dark:text-emerald-400"
+                      : `text-muted-foreground hover:text-foreground hover:border-primary/30 hover:bg-muted/30 ${(loading || fileLoading) ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`
+                    }`}
+                  aria-label={fileContext ? `Fichier chargé : ${fileContext.fileName}. Cliquer pour changer.` : "Joindre un fichier"}
+                  aria-expanded={uploadMenuOpen}
+                  aria-haspopup="menu"
+                >
+                  {fileLoading ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Plus className="h-3.5 w-3.5" />
+                  )}
+                  {fileContext && (
+                    <span className="text-xs truncate max-w-[120px] sm:max-w-[80px]">{fileContext.fileName}</span>
+                  )}
+                </button>
+                {/* Menu déroulant pour choisir le type de fichier */}
+                {uploadMenuOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setUploadMenuOpen(false)}
+                      aria-hidden="true"
+                    />
+                    <div
+                      role="menu"
+                      aria-label="Choix du type de fichier"
+                      className="absolute bottom-full left-0 mb-1.5 z-50 min-w-[160px] bg-card border border-border rounded-lg shadow-lg py-1 animate-in fade-in-0 zoom-in-95 duration-150"
+                    >
+                      <div className="px-3 py-1.5 text-[11px] font-medium text-muted-foreground border-b border-border">
+                        Type de fichier à importer
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          fileAcceptRef.current = ".xlsx,.xls";
+                          setFileAccept(".xlsx,.xls");
+                          if (fileInputRef.current) {
+                            fileInputRef.current.accept = ".xlsx,.xls";
+                            fileInputRef.current.click();
+                          }
+                          setUploadMenuOpen(false);
+                        }}
+                        disabled={loading || fileLoading}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                        role="menuitem"
+                      >
+                        <FileSpreadsheet className="h-4 w-4 shrink-0" />
+                        <span>Excel (.xlsx, .xls)</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          fileAcceptRef.current = ".csv";
+                          setFileAccept(".csv");
+                          if (fileInputRef.current) {
+                            fileInputRef.current.accept = ".csv";
+                            fileInputRef.current.click();
+                          }
+                          setUploadMenuOpen(false);
+                        }}
+                        disabled={loading || fileLoading}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                        role="menuitem"
+                      >
+                        <FileText className="h-4 w-4 shrink-0" />
+                        <span>CSV (.csv)</span>
+                      </button>
+                    </div>
+                  </>
                 )}
-                {fileContext && (
-                  <span className="hidden sm:inline text-xs truncate max-w-[80px]">{fileContext.fileName}</span>
-                )}
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".xlsx,.xls,.csv"
-                className="hidden"
-                onChange={handleFileChange}
-                disabled={loading || fileLoading}
-              />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept={fileAccept}
+                  className="hidden"
+                  onChange={handleFileChange}
+                  disabled={loading || fileLoading}
+                />
+              </div>
               <div className="flex items-center gap-1 bg-muted/80 border border-border p-0.5 rounded-lg text-xs">
                 <select
                   value={format}
