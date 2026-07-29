@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Key, HelpCircle, History, Trash2, ChevronLeft, ChevronRight, Coffee, LogOut, X, AlertTriangle, Crown, Gift, MessageSquarePlus } from "lucide-react";
+import { Key, HelpCircle, History, Trash2, ChevronLeft, ChevronRight, Coffee, LogOut, X, AlertTriangle, Gift, MessageSquarePlus } from "lucide-react";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { toast } from "sonner";
 import {
@@ -330,7 +330,7 @@ export function AppSidebar({
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-red-400">
                 <AlertTriangle size={18} />
-                Effacer tout l'historique ?
+                Effacer tout l&apos;historique ?
               </DialogTitle>
               <DialogDescription>
                 Cette action supprime l&apos;intégralité de vos requêtes sauvegardées.

@@ -1,7 +1,7 @@
 "use client";
 import { useRef, useEffect, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Loader2, Copy, Check, Wand2, Undo2, Zap, Brain, Key, Download, FileSpreadsheet, FileType, RefreshCw, Code2, Table, Plus, X, Upload } from "lucide-react";
+import { Loader2, Copy, Check, Wand2, Undo2, Zap, Download, FileSpreadsheet, RefreshCw, Code2, Table, Plus, X } from "lucide-react";
 import type { ExportFormat } from "@/lib/excelExport";
 
 export type GenerationMode = "formula_only" | "simple_table" | "complex_table";
@@ -65,13 +65,8 @@ export function FormulaInputBar({
   enhancing,
   onGenerate,
   onEnhance,
-  modelChoice,
-  onModelChange,
-  dailyFreeRemaining,
-  onRequestKeyModal,
   previousPrompt,
   onUndoEnhance,
-  apiKey,
   onSelectExample,
   format,
   onFormatChange,
@@ -411,8 +406,8 @@ export function FormulaResultArea({
       <div className="flex items-start gap-2 sm:gap-3 p-3 bg-muted/40 rounded-xl border border-border/50">
         <span className="text-yellow-500 text-sm flex-shrink-0">⚠️</span>
         <p className="text-[10px] sm:text-[11px] text-muted-foreground leading-relaxed">
-          <span className="text-foreground font-medium">Vérifiez avant d'utiliser en production.</span>{" "}
-          Les formules générées par IA peuvent contenir des erreurs. Testez toujours sur un jeu de données réel avant de l'intégrer à vos fichiers officiels.
+          <span className="text-foreground font-medium">Vérifiez avant d&apos;utiliser en production.</span>{" "}
+          Les formules générées par IA peuvent contenir des erreurs. Testez toujours sur un jeu de données réel avant de l&apos;intégrer à vos fichiers officiels.
         </p>
       </div>
 
@@ -423,7 +418,7 @@ export function FormulaResultArea({
             <span className="text-foreground font-medium">Tableau complexe généré — une colonne manque ?</span>{" "}
             Cliquez sur{" "}
             <span className="text-foreground font-medium">Régénérer</span>
-            {" "}— l'IA peut parfois omettre une ou deux colonnes (ici, l'IA a elle-même jugé la demande trop riche pour un tableau simple et est passée en mode complexe). Une nouvelle génération donne généralement toutes les colonnes attendues.
+            {" "}— l&apos;IA peut parfois omettre une ou deux colonnes (ici, l&apos;IA a elle-même jugé la demande trop riche pour un tableau simple et est passée en mode complexe). Une nouvelle génération donne généralement toutes les colonnes attendues.
           </p>
         </div>
       )}

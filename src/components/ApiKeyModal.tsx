@@ -26,7 +26,7 @@ export function ApiKeyModal({ open, onOpenChange, onKeySaved }: { open: boolean,
           </div>
           <h2 className="text-2xl font-bold font-display text-white tracking-tight">Configuration de la Clé API</h2>
           <p className="text-sm text-slate-400 mt-2 max-w-sm mx-auto leading-relaxed">
-            Pour continuer à utiliser l'assistant gratuitement et en toute sécurité, connectez votre propre clé Google Gemini.
+            Pour continuer à utiliser l&apos;assistant gratuitement et en toute sécurité, connectez votre propre clé Google Gemini.
           </p>
         </div>
 
@@ -113,7 +113,7 @@ export function ApiKeyModal({ open, onOpenChange, onKeySaved }: { open: boolean,
           <div className="mt-4 flex items-start gap-2 bg-slate-950/20 p-2.5 rounded-xl border border-slate-800/40 text-[10px] text-slate-500 leading-relaxed">
             <AlertCircle size={12} className="text-slate-400 flex-shrink-0 mt-0.5" />
             <span>
-              Google offre un quota gratuit généreux (jusqu'à 15 requêtes/minute), ce qui est largement suffisant pour une utilisation quotidienne classique d'Excel-Formule AI.
+              Google offre un quota gratuit généreux (jusqu&apos;à 15 requêtes/minute), ce qui est largement suffisant pour une utilisation quotidienne classique d&apos;Excel-Formule AI.
             </span>
           </div>
         </div>

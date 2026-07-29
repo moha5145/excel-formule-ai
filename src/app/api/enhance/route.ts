@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     // Daily free limit check (only for server-key users)
     let dailyFreeRemaining = -1;
     if (isUsingServerKey) {
-      const daily = dailyFreeLimit(ip);
+      const daily = await dailyFreeLimit(ip);
       dailyFreeRemaining = daily.remaining;
       if (!daily.allowed) {
         return NextResponse.json(
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const limitResult = rateLimit(ip, isUsingServerKey ? 10 : 60, 60 * 1000);
+    const limitResult = await rateLimit(ip, isUsingServerKey ? 10 : 60, 60 * 1000);
     
     if (!limitResult.success) {
       return NextResponse.json(

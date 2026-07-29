@@ -3,7 +3,7 @@ import { getClientIp, getDailyFreeRemaining } from "@/lib/rateLimit";
 
 export async function GET(req: NextRequest) {
   const ip = getClientIp(req);
-  const { remaining } = getDailyFreeRemaining(ip);
+  const { remaining } = await getDailyFreeRemaining(ip);
 
   return NextResponse.json({ remaining });
 }
