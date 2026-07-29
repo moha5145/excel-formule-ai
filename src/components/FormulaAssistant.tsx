@@ -261,7 +261,6 @@ export function FormulaInputBar({
                       <button
                         type="button"
                         onClick={() => {
-                          fileAcceptRef.current = ".xlsx,.xls";
                           setFileAccept(".xlsx,.xls");
                           if (fileInputRef.current) {
                             fileInputRef.current.accept = ".xlsx,.xls";
@@ -279,7 +278,6 @@ export function FormulaInputBar({
                       <button
                         type="button"
                         onClick={() => {
-                          fileAcceptRef.current = ".csv";
                           setFileAccept(".csv");
                           if (fileInputRef.current) {
                             fileInputRef.current.accept = ".csv";
