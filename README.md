@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Vous décrivez. L'IA formule. Vous collez.</strong><br>
-  <em>La fin des formules Excel qui donnent des sueurs froides.</em>
+  <em>Formules ET tableaux Excel générés en langage naturel. La fin des sueurs froides devant un tableur.</em>
 </p>
 
 <p align="center">
@@ -29,7 +29,13 @@
 
 ## 🤔 C'est quoi ?
 
-**Excel Formule AI** est une app web qui transforme vos phrases en formules Excel, Google Sheets ou LibreOffice Calc. Pas besoin d'être un wizard du tableur — vous écrivez en français, l'IA génère la formule, et vous la collez directement.
+**Excel Formule AI** est une app web qui transforme vos phrases en formules **et tableaux** Excel, Google Sheets ou LibreOffice Calc. Pas besoin d'être un wizard du tableur — vous écrivez en français, l'IA génère la formule *et* un tableau d'exemple ou une simulation complète, puis vous copiez ou téléchargez le `.xlsx` prêt à l'emploi.
+
+**Deux modes de génération :**
+- **Formule seule** — la formule + son explication, rapide et sans tableau
+- **Formule + tableau** — l'IA génère en plus un tableau d'exemple simple, ou une simulation multi-colonnes complexe (emprunt, amortissement, TVA, projections…) avec cellules interactives et données paramétrables
+
+Vous pouvez aussi **importer un fichier `.xlsx`, `.xls` ou `.csv`** existant et demander à l'IA de travailler dessus directement.
 
 > 💡 *"Calculer la TVA de 20 % sur une colonne de montants HT"*
 > → `=SI(A2<>"";A2*0.2;"")`
@@ -64,8 +70,8 @@ Parce que personne n'aime googler *"formule INDEX MATCH Excel FR"* à 23h. Ici, 
 
 - **Une formule correcte** — avec les bons séparateurs, les bons noms de fonctions
 - **Une explication** — pour comprendre ce que fait la formule
-- **Un tableau de simulation** — pour tester directement dans Excel
-- **Un export .xlsx** — le fichier est prêt à l'emploi
+- **Un tableau complet** — simple ou simulation multi-colonnes, directement exploitable dans Excel
+- **Un export .xlsx** — le fichier est prêt à l'emploi, tableau inclus
 
 ---
 
@@ -73,11 +79,12 @@ Parce que personne n'aime googler *"formule INDEX MATCH Excel FR"* à 23h. Ici, 
 
 | Ce que vous faites | Ce que l'app fait |
 |---|---|
-| Écrire en français | Génère la formule adaptée |
+| Écrire en français | Génère la formule adaptée **+ un tableau** (simple ou simulation complexe) |
+| Importer un fichier `.xlsx` / `.xls` / `.csv` | Analyse le fichier et travaille sur ses données |
 | Choisir Excel / LibreOffice | Adapte les séparateurs et fonctions |
 | Choisir FR / EN | Utilise les bons noms (`SI` vs `IF`) |
 | Demander une amélioration de prompt | Reformule votre demande pour plus de précision |
-| Télécharger le .xlsx | Crée un classeur avec formule + guide + simulation |
+| Télécharger le .xlsx | Crée un classeur avec formule + tableau + guide |
 
 ---
 
@@ -173,10 +180,11 @@ Le projet fonctionne sur toute plateforme supportant Next.js (Docker, Railway, N
 
 ## 🧪 Utilisation
 
-1. **Décrivez** votre besoin en français
-2. **Choisissez** le format cible (Excel FR/EN, LibreOffice FR/EN)
-3. **Cliquez** sur Générer (ou `Ctrl+Entrée`)
-4. **Copiez** la formule ou **téléchargez** le .xlsx
+1. **Décrivez** votre besoin en français (ou importez un fichier `.xlsx` / `.xls` / `.csv`)
+2. **Choisissez** le mode : *Formule seule* ou *Formule + tableau*
+3. **Choisissez** le format cible (Excel FR/EN, Sheets FR/EN, LibreOffice)
+4. **Cliquez** sur Générer (ou `Ctrl+Entrée`)
+5. **Copiez** la formule ou **téléchargez** le .xlsx avec son tableau
 
 ### Raccourcis clavier
 
