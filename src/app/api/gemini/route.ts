@@ -21,13 +21,13 @@ const GeminiRequestSchema = z.object({
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    
+
     // Validation Zod des paramètres d'entrée
     const parsed = GeminiRequestSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
     }
-    
+
     const { prompt, messages, apiKey, format: reqFormat, generationMode: reqGenerationMode, previousResponse } = parsed.data;
     const generationMode = reqGenerationMode || "formula_only";
 
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
       ];
     }
     const finalApiKey = apiKey || process.env.GEMINI_API_KEY;
-    
+
     if (!finalApiKey) {
       return NextResponse.json({ error: "Clé API manquante et aucune clé serveur configurée." }, { status: 400 });
     }
@@ -80,11 +80,11 @@ export async function POST(req: NextRequest) {
     }
 
     const limitResult = await rateLimit(ip, isUsingServerKey ? 10 : 60, 60 * 1000);
-    
+
     if (!limitResult.success) {
       return NextResponse.json(
         { error: "Trop de requêtes. Veuillez patienter une minute." },
-        { 
+        {
           status: 429,
           headers: {
             "Retry-After": Math.ceil((limitResult.reset - Date.now()) / 1000).toString(),
@@ -687,15 +687,15 @@ ${modeInstruction}`;
       parts: [{ text: msg.content }],
     }));
 
-    // Modèle par défaut : gemini-3.6-flash (stable, le plus avancé en date).
+    // Modèle par défaut : gemini-3.8-flash (stable, le plus avancé en date).
     // Le sélecteur "Pro" a été retiré de l'UI — 2.5 Pro n'est pas nécessairement
-    // supérieur à 3.6 Flash, et gemini-3.1-pro n'existe pas en v1beta (404 systématique).
+    // supérieur aux modèles Flash 3.x, et gemini-3.1-pro n'existe pas en v1beta (404 systématique).
     // On garde modelChoice côté API pour rétro-compat mais on ignore sa valeur.
-    const selectedModel = "gemini-3.6-flash";
+    const selectedModel = "gemini-3.8-flash";
 
     async function generateStream(modelName: string) {
       const genAI = new GoogleGenerativeAI(apiKeyString);
-      const model = genAI.getGenerativeModel({ 
+      const model = genAI.getGenerativeModel({
         model: modelName,
         systemInstruction: systemInstruction,
       });
@@ -706,19 +706,19 @@ ${modeInstruction}`;
     try {
       result = await generateStream(selectedModel);
     } catch (streamErr: unknown) {
-      // Repli ordonné : 3.6-flash → 3.5-flash → 2.5-flash.
+      // Repli ordonné : 3.8-flash → 3.6-flash → 3.1-flash.
       // On capture 503 (saturation), 404 (modèle retiré), et 400 (incompatible).
       const isRecoverable = (e: unknown) =>
         e instanceof Error && /503|404|400|not found/i.test(e.message);
       if (isRecoverable(streamErr)) {
-        const fallback = selectedModel === "gemini-3.6-flash" ? "gemini-3.5-flash" : "gemini-2.5-flash";
+        const fallback = selectedModel === "gemini-3.8-flash" ? "gemini-3.6-flash" : "gemini-3.1-flash";
         console.warn(`${selectedModel} unavailable (${streamErr instanceof Error ? streamErr.message : "?"}), falling back to ${fallback}`);
         try {
           result = await generateStream(fallback);
         } catch (fallbackErr: unknown) {
-          if (isRecoverable(fallbackErr) && fallback === "gemini-3.5-flash") {
-            console.warn(`3.5-flash unavailable, final fallback to gemini-2.5-flash`);
-            result = await generateStream("gemini-2.5-flash");
+          if (isRecoverable(fallbackErr) && fallback === "gemini-3.6-flash") {
+            console.warn(`3.6-flash unavailable, final fallback to gemini-3.1-flash`);
+            result = await generateStream("gemini-3.1-flash");
           } else {
             throw fallbackErr;
           }
