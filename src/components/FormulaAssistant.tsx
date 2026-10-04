@@ -1,14 +1,18 @@
 "use client";
 import { useRef, useEffect, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Loader2, Copy, Check, Wand2, Undo2, Zap, Download, FileSpreadsheet, RefreshCw, Code2, Table, Plus, X, FileText } from "lucide-react";
+import { Loader2, Copy, Check, Wand2, Undo2, Zap, Download, FileSpreadsheet, RefreshCw, Code2, Table, Plus, X, FileText, Eye } from "lucide-react";
 import type { ExportFormat } from "@/lib/excelExport";
+import type { ParsedSheet, ColumnStat } from "@/lib/fileParser";
 
 export type GenerationMode = "formula_only" | "simple_table" | "complex_table";
 
-interface FileContext {
+export interface FileContext {
   fileName: string;
   textRepresentation: string;
+  fileSize?: number;
+  sheets?: ParsedSheet[];
+  columnStats?: Record<string, ColumnStat[]>;
 }
 
 export const FORMULA_EXAMPLES: { label: string; keywords: string }[] = [
@@ -56,6 +60,7 @@ interface FormulaInputBarProps {
   onGenerationModeChange: (mode: GenerationMode) => void;
   fileContext: FileContext | null;
   onFileSelect: (file: FileContext | null) => void;
+  onOpenPreview?: () => void;
 }
 
 export function FormulaInputBar({
@@ -74,6 +79,7 @@ export function FormulaInputBar({
   onGenerationModeChange,
   fileContext,
   onFileSelect,
+  onOpenPreview,
 }: FormulaInputBarProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -114,6 +120,9 @@ export function FormulaInputBar({
       onFileSelect({
         fileName: f.name,
         textRepresentation: result.textRepresentation,
+        fileSize: f.size,
+        sheets: result.sheets,
+        columnStats: result.columnStats,
       });
     } catch {
       setFileError('Erreur lors de la lecture du fichier');
@@ -184,15 +193,37 @@ export function FormulaInputBar({
         <div className="relative flex flex-col bg-card border border-border/40 rounded-2xl p-2 sm:p-2.5 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 transition-all">
           {/* Fichier importé : chip au-dessus du textarea */}
           {fileContext && (
-            <div className="flex items-center gap-2 mb-1.5 px-1 rounded-lg border border-emerald-200 bg-emerald-50 dark:border-emerald-800/50 dark:bg-emerald-950/20 py-1">
+            <div className="flex items-center gap-2 mb-1.5 px-2 rounded-xl border border-emerald-200/80 bg-emerald-50/90 dark:border-emerald-800/50 dark:bg-emerald-950/30 py-1.5 transition-all">
               <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-              <span className="flex-1 truncate text-xs text-emerald-700 dark:text-emerald-300 font-medium">
-                {fileContext.fileName}
-              </span>
+              <div className="flex-1 min-w-0 flex items-center gap-1.5 flex-wrap">
+                <span className="truncate text-xs text-emerald-700 dark:text-emerald-300 font-medium max-w-[200px] sm:max-w-xs">
+                  {fileContext.fileName}
+                </span>
+                {fileContext.sheets && fileContext.sheets.length > 0 && (
+                  <span className="text-[10px] text-emerald-700/80 dark:text-emerald-300/80 px-1.5 py-0.2 rounded-md bg-emerald-100/70 dark:bg-emerald-900/40 shrink-0 font-medium">
+                    {fileContext.sheets.length > 1
+                      ? `${fileContext.sheets.length} feuilles`
+                      : `${fileContext.sheets[0].totalRows} lignes`}
+                  </span>
+                )}
+              </div>
+
+              {onOpenPreview && fileContext.sheets && fileContext.sheets.length > 0 && (
+                <button
+                  type="button"
+                  onClick={onOpenPreview}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-100/80 dark:bg-emerald-900/50 hover:bg-emerald-200/80 dark:hover:bg-emerald-800/60 transition-colors shrink-0 cursor-pointer"
+                  title="Prévisualiser les données et masquer les colonnes sensibles"
+                >
+                  <Eye className="h-3.5 w-3.5" />
+                  <span className="text-[11px]">Aperçu</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={handleRemoveFile}
-                className="rounded p-0.5 text-emerald-500 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors shrink-0"
+                className="rounded-lg p-1 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors shrink-0 cursor-pointer"
                 title="Retirer le fichier"
               >
                 <X className="h-3.5 w-3.5" />
