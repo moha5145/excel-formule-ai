@@ -7,7 +7,7 @@ import { FilePreviewModal } from "@/components/FilePreviewModal";
 import { ComplexTablePreview } from "@/components/ComplexTablePreview";
 import { FormulaInputBar, FormulaResultArea, type GenerationMode, type FileContext } from "@/components/FormulaAssistant";
 import { AppSidebar } from "@/components/AppSidebar";
-import { Menu, Copy, FileSpreadsheet, ChevronDown, Code2, Check } from "lucide-react";
+import { Menu, Copy, FileSpreadsheet, ChevronDown, Code2, Check, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import type { ExportFormat } from "@/lib/excelExport";
@@ -30,6 +30,9 @@ function parseMessageContent(content: string) {
   const schemaMatch = content.match(/<!--\s*TABLE_SCHEMA:\s*(\{[\s\S]*?\})\s*-->/);
   const schemaJsonRaw = schemaMatch ? schemaMatch[1].trim() : null;
 
+  const fileModifMatch = content.match(/<!--\s*FILE_MODIFICATION:\s*(\{[\s\S]*?\})\s*-->/);
+  const fileModifRaw = fileModifMatch ? fileModifMatch[1].trim() : null;
+
   let schemaObj: unknown = null;
   if (schemaJsonRaw) {
     try {
@@ -42,8 +45,18 @@ function parseMessageContent(content: string) {
     }
   }
 
+  let fileModifObj: unknown = null;
+  if (fileModifRaw) {
+    try {
+      fileModifObj = JSON.parse(fileModifRaw);
+    } catch {
+      fileModifObj = null;
+    }
+  }
+
   const displayMarkdown = content
     .replace(/<!--\s*TABLE_SCHEMA:[\s\S]*?-->/g, "")
+    .replace(/<!--\s*FILE_MODIFICATION:[\s\S]*?-->/g, "")
     .replace(/<!--\s*FORMULA_EN:[\s\S]*?-->/g, "")
     .replace(/<!--\s*PARAM[\s\S]*?-->/g, "")
     .replace(/<!--\s*MODE_OVERRIDE:[\s\S]*?-->/g, "")
@@ -53,6 +66,8 @@ function parseMessageContent(content: string) {
     displayMarkdown,
     schemaJsonRaw,
     schemaObj,
+    fileModifObj,
+    fileModifRaw,
   };
 }
 
@@ -151,6 +166,7 @@ interface Message {
   fileName?: string;
   userPrompt?: string;
   generationMode?: GenerationMode;
+  fileContext?: FileContext;
 }
 
 interface HistoryItem {
@@ -312,6 +328,89 @@ export default function Home() {
     }
   }, [exportFormat]);
 
+  const handleDownloadModifiedFile = useCallback(
+    async (targetFileContext: FileContext, content: string) => {
+      if (!targetFileContext.rawBuffer) {
+        toast.error("Le fichier source n'est plus en mémoire. Veuillez le réimporter.");
+        return;
+      }
+
+      try {
+        const { extractFileModificationSchema, validateFileModificationSchema } = await import(
+          "@/lib/excelExport/schemaParser"
+        );
+        const { downloadModifiedWorkbookAsExcel } = await import(
+          "@/lib/excelExport/workbookModifier"
+        );
+        const { extractFormula, extractEnglishFormula } = await import("@/lib/excelExport");
+
+        let newColumns: {
+          header: string;
+          formula: string;
+          formula_en?: string;
+          type?: "currency" | "percentage" | "integer" | "number" | "text" | "date";
+        }[] = [];
+
+        const rawModif = extractFileModificationSchema(content);
+        if (rawModif) {
+          const validated = validateFileModificationSchema(rawModif);
+          newColumns = validated.new_columns;
+        } else {
+          // Fallback intelligent si le modèle a produit une formule simple
+          const formula = extractFormula(content);
+          const formulaEn = extractEnglishFormula(content);
+          if (formula) {
+            newColumns = [
+              {
+                header: "Calcul IA",
+                formula,
+                formula_en: formulaEn || formula,
+                type: "currency",
+              },
+            ];
+          }
+        }
+
+        if (newColumns.length === 0) {
+          toast.info("Aucune formule de colonne détectée à injecter dans le fichier.");
+          return;
+        }
+
+        const targetSheet = activeSheetName || targetFileContext.sheets?.[0]?.name;
+        const { blob, warnings } = await downloadModifiedWorkbookAsExcel({
+          rawBuffer: targetFileContext.rawBuffer,
+          fileName: targetFileContext.fileName,
+          sheetName: targetSheet,
+          newColumns,
+          format: exportFormat,
+        });
+
+        const baseName = targetFileContext.fileName.replace(/\.[^/.]+$/, "");
+        const downloadName = `${baseName}_modifie.xlsx`;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = downloadName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        if (warnings.length > 0) {
+          toast.warning("Fichier exporté avec des avertissements.", {
+            description: warnings.slice(0, 2).join("; "),
+          });
+        } else {
+          toast.success(`Fichier « ${downloadName} » exporté avec succès !`);
+        }
+      } catch (err: unknown) {
+        console.error(err);
+        toast.error(err instanceof Error ? err.message : "Erreur lors de l'export du fichier modifié.");
+      }
+    },
+    [exportFormat, activeSheetName]
+  );
+
   useEffect(() => {
     if (history.length > 0) {
       const needsMigration = history.some((item) => !item.id);
@@ -382,11 +481,11 @@ export default function Home() {
         : [...messages];
       messagesToSend = trimmed;
     } else {
-      const newUserMessage = {
+      const newUserMessage: Message = {
         role: "user" as const,
         content: userPromptText,
         userPrompt: userPromptText,
-        ...(fileContext ? { fileName: fileContext.fileName } : {}),
+        ...(fileContext ? { fileName: fileContext.fileName, fileContext } : {}),
       };
       messagesToSend = [...messages, newUserMessage];
       setMessages([...messagesToSend]);
@@ -460,7 +559,13 @@ export default function Home() {
 
       const { content: cleanContent, effectiveMode } = applyModeOverride(streamResponse, generationMode);
       const normalizedContent = normalizeTablesInResponse(cleanContent);
-      const assistantMessage = { role: "model" as const, content: normalizedContent, userPrompt: userPromptText, generationMode: effectiveMode };
+      const assistantMessage: Message = {
+        role: "model" as const,
+        content: normalizedContent,
+        userPrompt: userPromptText,
+        generationMode: effectiveMode,
+        ...(fileContext ? { fileName: fileContext.fileName, fileContext } : {}),
+      };
       const updatedMessages = [...messagesToSend, assistantMessage];
       setMessages(updatedMessages);
 
@@ -491,10 +596,7 @@ export default function Home() {
       toast.error(err instanceof Error ? err.message : "Erreur lors de la génération.");
     } finally {
       setLoading(false);
-      setFileContext(null);
       setPreviewModalOpen(false);
-      setActiveSheetName("");
-      setExcludedColumns([]);
     }
   }, [prompt, loading, apiKey, dailyFreeRemaining, fileContext, activeSheetName, excludedColumns, messages, modelChoice, exportFormat, generationMode, currentConversationId, setCurrentConversationId, setHistory, checkCoffeeToast]);
 
@@ -632,9 +734,11 @@ export default function Home() {
             ) : (
               <div className="w-full max-w-4xl mx-auto flex flex-col gap-4">
                 {messages.map((msg, idx) => {
-                  const { displayMarkdown, schemaJsonRaw, schemaObj } = msg.role === "model"
+                  const { displayMarkdown, schemaJsonRaw, schemaObj, fileModifObj, fileModifRaw } = msg.role === "model"
                     ? parseMessageContent(msg.content)
-                    : { displayMarkdown: msg.content, schemaJsonRaw: null, schemaObj: null };
+                    : { displayMarkdown: msg.content, schemaJsonRaw: null, schemaObj: null, fileModifObj: null, fileModifRaw: null };
+
+                  const msgFileContext = msg.fileContext || fileContext;
 
                   return (
                     <div key={idx} className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start w-full"}`}>
@@ -668,13 +772,40 @@ export default function Home() {
                             }}>
                               {normalizeMarkdownBlocks(displayMarkdown)}
                             </ReactMarkdown>
-                            {schemaObj && (
+
+                            {(schemaObj || fileModifObj) && (
                               <ComplexTablePreview
                                 rawSchema={schemaObj}
+                                fileModification={fileModifObj}
+                                fileContext={msgFileContext}
                                 onDownloadExcel={() => handleDownloadExcel(msg.content, msg.userPrompt || "", msg.generationMode)}
+                                onDownloadModifiedFile={
+                                  msgFileContext?.rawBuffer
+                                    ? () => handleDownloadModifiedFile(msgFileContext, msg.content)
+                                    : undefined
+                                }
                               />
                             )}
+
+                            {msgFileContext?.rawBuffer && !schemaObj && !fileModifObj && (
+                              <div className="mt-3 p-3 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 flex flex-wrap items-center justify-between gap-2 not-prose">
+                                <div className="flex items-center gap-2 text-xs text-emerald-800 dark:text-emerald-300">
+                                  <FileSpreadsheet className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                                  <span>Fichier source disponible : <strong>{msgFileContext.fileName}</strong></span>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleDownloadModifiedFile(msgFileContext, msg.content)}
+                                  className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 text-xs rounded-xl shadow-sm h-8 cursor-pointer"
+                                >
+                                  <Download className="h-3.5 w-3.5" />
+                                  Exporter « {msgFileContext.fileName} » complété (.xlsx)
+                                </Button>
+                              </div>
+                            )}
+
                             {schemaJsonRaw && <JsonSchemaCollapsible jsonRaw={schemaJsonRaw} />}
+                            {fileModifRaw && <JsonSchemaCollapsible jsonRaw={fileModifRaw} />}
                           </>
                         ) : (
                           <div className="flex flex-col gap-1.5">

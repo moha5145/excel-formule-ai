@@ -13,6 +13,8 @@ export interface FileContext {
   fileSize?: number;
   sheets?: ParsedSheet[];
   columnStats?: Record<string, ColumnStat[]>;
+  rawBuffer?: ArrayBuffer;
+  fileType?: "xlsx" | "xls" | "csv";
 }
 
 export const FORMULA_EXAMPLES: { label: string; keywords: string }[] = [
@@ -123,6 +125,8 @@ export function FormulaInputBar({
         fileSize: f.size,
         sheets: result.sheets,
         columnStats: result.columnStats,
+        rawBuffer: result.rawBuffer,
+        fileType: result.fileType,
       });
     } catch {
       setFileError('Erreur lors de la lecture du fichier');
