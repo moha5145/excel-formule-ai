@@ -78,3 +78,20 @@ describe("buildTextRepresentation avec colonnes confidentielles", () => {
     expect(text).not.toContain("Alice");
   });
 });
+
+describe("parseFile avec rawBuffer et indexation", () => {
+  it("devrait conserver rawBuffer et assigner les lettres de colonnes réelles", async () => {
+    const { parseFile } = await import("./fileParser");
+    const csvContent = "Produit,Prix,Quantite\nPomme,1.5,10\nBanane,2.0,5";
+    const file = new File([csvContent], "fruits.csv", { type: "text/csv" });
+
+    const result = await parseFile(file);
+
+    expect(result.rawBuffer).toBeDefined();
+    expect(result.rawBuffer.byteLength).toBeGreaterThan(0);
+    expect(result.fileType).toBe("csv");
+    expect(result.sheets[0].colLetters).toEqual(["A", "B", "C"]);
+    expect(result.sheets[0].dataStartRowIndex).toBe(2);
+  });
+});
+

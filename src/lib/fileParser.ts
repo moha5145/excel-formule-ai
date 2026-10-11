@@ -14,12 +14,16 @@ export interface ParsedSheet {
   rows: (string | number | null)[][]
   totalRows: number
   totalCols: number
+  colLetters: string[]
+  dataStartRowIndex: number
   stats?: ColumnStat[]
 }
 
 export interface FileParseResult {
   fileName: string
   fileSize: number
+  fileType: 'xlsx' | 'xls' | 'csv'
+  rawBuffer: ArrayBuffer
   sheets: ParsedSheet[]
   textRepresentation: string // pour le prompt IA
   columnStats?: Record<string, ColumnStat[]>
@@ -106,7 +110,20 @@ export function buildColumnStats(
   })
 }
 
+export function getColumnLetter(colIndexZeroBased: number): string {
+  let temp = colIndexZeroBased
+  let letter = ''
+  while (temp >= 0) {
+    letter = String.fromCharCode((temp % 26) + 65) + letter
+    temp = Math.floor(temp / 26) - 1
+  }
+  return letter
+}
+
 async function readFileAsArrayBuffer(file: File): Promise<ArrayBuffer> {
+  if (typeof file.arrayBuffer === 'function') {
+    return await file.arrayBuffer()
+  }
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => resolve(reader.result as ArrayBuffer)
@@ -149,6 +166,7 @@ function sheetToParsedSheet(
   )
 
   const stats = buildColumnStats(headers, rows)
+  const colLetters = headers.map((_, i) => getColumnLetter(i))
 
   return {
     name,
@@ -156,6 +174,8 @@ function sheetToParsedSheet(
     rows,
     totalRows: data.length > 0 ? data.length - 1 : 0,
     totalCols: headers.length,
+    colLetters,
+    dataStartRowIndex: 2,
     stats,
   }
 }
@@ -221,8 +241,14 @@ export async function parseFile(
   excludedColumns: string[] = []
 ): Promise<FileParseResult> {
   const buffer = await readFileAsArrayBuffer(file)
+  const isCsv = file.name.endsWith('.csv')
+  const fileType: 'xlsx' | 'xls' | 'csv' = isCsv
+    ? 'csv'
+    : file.name.endsWith('.xls')
+    ? 'xls'
+    : 'xlsx'
 
-  if (file.name.endsWith('.csv')) {
+  if (isCsv) {
     const text = new TextDecoder('utf-8').decode(buffer)
     const delimiter = detectCsvDelimiter(text)
     const workbook = XLSX.read(text, {
@@ -238,6 +264,8 @@ export async function parseFile(
     return {
       fileName: file.name,
       fileSize: file.size,
+      fileType,
+      rawBuffer: buffer,
       sheets: [parsed],
       textRepresentation: buildTextRepresentation(parsed, formulas, excludedColumns),
       columnStats,
@@ -264,6 +292,8 @@ export async function parseFile(
   return {
     fileName: file.name,
     fileSize: file.size,
+    fileType,
+    rawBuffer: buffer,
     sheets,
     textRepresentation: textRepresentations.join('\n\n'),
     columnStats,
