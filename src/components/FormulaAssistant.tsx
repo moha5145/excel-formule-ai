@@ -484,6 +484,8 @@ interface FormulaResultAreaProps {
   onDownloadExcel: () => void;
   onRegenerate: (promptOverride?: string) => void;
   generationMode?: GenerationMode;
+  fileName?: string;
+  hasImportedFile?: boolean;
 }
 
 export function FormulaResultArea({
@@ -495,6 +497,8 @@ export function FormulaResultArea({
   onDownloadExcel,
   onRegenerate,
   generationMode = "formula_only",
+  fileName,
+  hasImportedFile = false,
 }: FormulaResultAreaProps) {
   const resultRef = useRef<HTMLDivElement>(null);
 
@@ -560,14 +564,19 @@ export function FormulaResultArea({
         >
           <Download size={14} className="mr-1 sm:mr-1.5 flex-shrink-0" /> Explication
         </Button>
-        {generationMode !== "formula_only" && (
+        {(generationMode !== "formula_only" || hasImportedFile) && (
           <Button
             variant="outline"
             onClick={onDownloadExcel}
             className="min-w-0 border-green-300 dark:border-green-900/50 bg-green-50 dark:bg-emerald-950/20 hover:bg-green-100 dark:hover:bg-emerald-900/30 hover:border-green-400 dark:hover:border-emerald-700 active:scale-95 text-green-700 dark:text-emerald-400 rounded-xl transition-all h-9 px-2 sm:px-3 text-[11px] sm:text-xs cursor-pointer focus-visible:outline-none sm:flex-1"
-            title="Télécharger l'exemple Excel (.xlsx)"
+            title={
+              hasImportedFile && fileName
+                ? `Télécharger « ${fileName} » complété (.xlsx)`
+                : "Télécharger l'exemple Excel (.xlsx)"
+            }
           >
-            <FileSpreadsheet size={14} className="mr-1 sm:mr-1.5 text-green-600 dark:text-emerald-500 flex-shrink-0" /> Excel
+            <FileSpreadsheet size={14} className="mr-1 sm:mr-1.5 text-green-600 dark:text-emerald-500 flex-shrink-0" />
+            <span>{hasImportedFile ? "Excel" : "Excel"}</span>
           </Button>
         )}
       </div>

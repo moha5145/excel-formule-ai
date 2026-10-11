@@ -826,13 +826,19 @@ export default function Home() {
                           copied={copiedIdx === idx}
                           onCopy={() => handleCopy(msg.content, idx)}
                           onDownload={() => handleDownload(msg.content)}
-                          onDownloadExcel={() => handleDownloadExcel(msg.content, msg.userPrompt || "", msg.generationMode)}
+                          onDownloadExcel={
+                            msgFileContext?.rawBuffer
+                              ? () => handleDownloadModifiedFile(msgFileContext, msg.content)
+                              : () => handleDownloadExcel(msg.content, msg.userPrompt || "", msg.generationMode)
+                          }
                           onRegenerate={() => {
                             const userMsg = msg.userPrompt;
                             const fallback = userMsg || messages.slice(0, idx).reverse().find(m => m.role === "user")?.content || "";
                             handleGenerate(fallback);
                           }}
                           generationMode={msg.generationMode || "formula_only"}
+                          fileName={msgFileContext?.fileName}
+                          hasImportedFile={Boolean(msgFileContext?.rawBuffer)}
                         />
                       )}
                     </div>
