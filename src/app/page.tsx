@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect, type ReactNode } from "react"
 import { toast } from "sonner";
 import { ApiKeyModal } from "@/components/ApiKeyModal";
 import { FilePreviewModal } from "@/components/FilePreviewModal";
+import { ComplexTablePreview } from "@/components/ComplexTablePreview";
 import { FormulaInputBar, FormulaResultArea, type GenerationMode, type FileContext } from "@/components/FormulaAssistant";
 import { AppSidebar } from "@/components/AppSidebar";
 import { Menu, Copy, FileSpreadsheet, ChevronDown, Code2, Check } from "lucide-react";
@@ -29,6 +30,18 @@ function parseMessageContent(content: string) {
   const schemaMatch = content.match(/<!--\s*TABLE_SCHEMA:\s*(\{[\s\S]*?\})\s*-->/);
   const schemaJsonRaw = schemaMatch ? schemaMatch[1].trim() : null;
 
+  let schemaObj: unknown = null;
+  if (schemaJsonRaw) {
+    try {
+      const parsed = JSON.parse(schemaJsonRaw);
+      if (parsed && typeof parsed === "object" && (parsed as { type?: string }).type === "complex_table") {
+        schemaObj = parsed;
+      }
+    } catch {
+      schemaObj = null;
+    }
+  }
+
   const displayMarkdown = content
     .replace(/<!--\s*TABLE_SCHEMA:[\s\S]*?-->/g, "")
     .replace(/<!--\s*FORMULA_EN:[\s\S]*?-->/g, "")
@@ -39,6 +52,7 @@ function parseMessageContent(content: string) {
   return {
     displayMarkdown,
     schemaJsonRaw,
+    schemaObj,
   };
 }
 
@@ -618,9 +632,9 @@ export default function Home() {
             ) : (
               <div className="w-full max-w-4xl mx-auto flex flex-col gap-4">
                 {messages.map((msg, idx) => {
-                  const { displayMarkdown, schemaJsonRaw } = msg.role === "model"
+                  const { displayMarkdown, schemaJsonRaw, schemaObj } = msg.role === "model"
                     ? parseMessageContent(msg.content)
-                    : { displayMarkdown: msg.content, schemaJsonRaw: null };
+                    : { displayMarkdown: msg.content, schemaJsonRaw: null, schemaObj: null };
 
                   return (
                     <div key={idx} className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start w-full"}`}>
@@ -654,6 +668,12 @@ export default function Home() {
                             }}>
                               {normalizeMarkdownBlocks(displayMarkdown)}
                             </ReactMarkdown>
+                            {schemaObj && (
+                              <ComplexTablePreview
+                                rawSchema={schemaObj}
+                                onDownloadExcel={() => handleDownloadExcel(msg.content, msg.userPrompt || "", msg.generationMode)}
+                              />
+                            )}
                             {schemaJsonRaw && <JsonSchemaCollapsible jsonRaw={schemaJsonRaw} />}
                           </>
                         ) : (

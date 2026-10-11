@@ -180,6 +180,51 @@ function setCellValueByType(
   }
 }
 
+// Convertit un index de colonne 1-based en lettre Excel (1 → A, 27 → AA)
+function columnIndexToLetter(index: number): string {
+  let letter = "";
+  let n = index;
+  while (n > 0) {
+    const rem = (n - 1) % 26;
+    letter = String.fromCharCode(65 + rem) + letter;
+    n = Math.floor((n - 1) / 26);
+  }
+  return letter || "A";
+}
+
+// Détermine la plage de référence d'une liste déroulante.
+// Priorité : formula_range explicite, sinon résolution via ref_table/ref_column
+// dans les tables de référence du schéma.
+function resolveColumnValidationRange(
+  col: TableColumn,
+  schema: TableSchema
+): string | null {
+  const validation = col.validation;
+  if (!validation || validation.type !== "list") return null;
+
+  if (validation.formula_range) return validation.formula_range;
+
+  if (validation.ref_table && schema.reference_tables) {
+    const refTable = schema.reference_tables.find(
+      (t) => t.sheet_name === validation.ref_table || t.name === validation.ref_table
+    );
+    if (refTable) {
+      let colIdx = 0;
+      if (validation.ref_column) {
+        const found = refTable.headers.findIndex(
+          (h) => h.toLowerCase().trim() === validation.ref_column!.toLowerCase().trim()
+        );
+        if (found >= 0) colIdx = found;
+      }
+      const letter = columnIndexToLetter(colIdx + 1);
+      const startDataRow = 2; // les en-têtes sont à la ligne 1
+      const endDataRow = startDataRow + Math.max(0, refTable.rows.length - 1);
+      return `${refTable.sheet_name}!$${letter}$${startDataRow}:$${letter}$${endDataRow}`;
+    }
+  }
+  return null;
+}
+
 export function buildComplexWorkbook(
   workbook: ExcelJS.Workbook,
   schema: TableSchema,
@@ -428,6 +473,20 @@ export function buildComplexWorkbook(
         };
       }
       cell.alignment = { vertical: "middle", horizontal: col.type === "text" ? "left" : "right" };
+
+      // Liste déroulante native Excel pour les colonnes liées à une table de
+      // référence (ou explicitement via col.validation).
+      const validationRange = resolveColumnValidationRange(col, schema);
+      if (validationRange) {
+        cell.dataValidation = {
+          type: "list",
+          allowBlank: true,
+          formulae: [validationRange],
+          showErrorMessage: true,
+          errorTitle: "Valeur invalide",
+          error: "Veuillez choisir un élément dans la liste déroulante.",
+        };
+      }
     }
 
     // ── Cellule "Total de ligne" optionnelle (pivot léger) ──

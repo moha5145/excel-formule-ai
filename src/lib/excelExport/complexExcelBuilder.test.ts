@@ -440,4 +440,31 @@ describe("complexExcelBuilder", () => {
     expect(names).toEqual(["Tableau Interactif", "Ref1", "Ref2", "Formule & Guide"]);
     expect(names[names.length - 1]).toBe("Formule & Guide");
   });
+
+  it("devrait appliquer une dataValidation de type liste sur les cellules de colonne concernées", () => {
+    const schema: TableSchema = {
+      type: "complex_table",
+      title: "Test Validation",
+      parameters: [{ name: "Taux", ref: "C5", value: 1, type: "number" }],
+      columns: [
+        {
+          header: "Produit",
+          type: "text",
+          formula: null,
+          formula_en: null,
+          validation: { type: "list", formula_range: "RefProduits!$A$2:$A$5" },
+        },
+        { header: "Prix", type: "number", formula: "=10", formula_en: "=10" },
+      ],
+      data_start_row: 10,
+      sample_rows: 3,
+    };
+
+    const wb = new ExcelJS.Workbook();
+    const { workbook } = buildComplexWorkbook(wb, schema, "", "prompt", "excel-fr");
+    const ws = workbook.getWorksheet("Tableau Interactif")!;
+    const cell = ws.getCell("C11");
+    expect(cell.dataValidation?.type).toBe("list");
+    expect(cell.dataValidation?.formulae).toEqual(["RefProduits!$A$2:$A$5"]);
+  });
 });

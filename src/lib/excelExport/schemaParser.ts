@@ -20,12 +20,20 @@ export interface TableParameter {
   formula_label?: string | null; // Formule adaptée au format utilisateur (affichage guide, optionnel)
 }
 
+export interface ColumnValidation {
+  type: "list";
+  ref_table?: string;
+  ref_column?: string;
+  formula_range?: string; // ex: "RefProduits!$B$2:$B$10"
+}
+
 export interface TableColumn {
   header: string;
   type: ColumnType;
   formula: string | null;       // null = colonne input (statique)
   formula_en: string | null;     // version anglaise invariante
   description?: string;
+  validation?: ColumnValidation;
 }
 
 export interface ReferenceTable {
@@ -106,12 +114,20 @@ const TableParameterSchema = z.object({
   }
 });
 
+const ColumnValidationSchema = z.object({
+  type: z.literal("list"),
+  ref_table: z.string().optional(),
+  ref_column: z.string().optional(),
+  formula_range: z.string().optional(),
+});
+
 const TableColumnSchema = z.object({
   header: z.string().min(1).max(60),
   type: ColumnTypeSchema,
   formula: z.union([z.string().min(1).max(500), z.null()]),
   formula_en: z.union([z.string().min(1).max(500), z.null()]),
   description: z.string().max(200).optional(),
+  validation: ColumnValidationSchema.optional(),
 }).superRefine((col, ctx) => {
   // Cohérence : si formula existe, formula_en doit exister aussi (et inversement)
   if ((col.formula === null) !== (col.formula_en === null)) {

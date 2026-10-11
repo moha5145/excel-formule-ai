@@ -149,6 +149,37 @@ describe("schemaParser", () => {
       expect(validated.total_row_label).toBe("TOTAUX");
     });
 
+    it("devrait accepter un champ validation de type list sur une colonne", () => {
+      const schema = {
+        type: "complex_table",
+        title: "Tableau Commandes",
+        parameters: [{ name: "TVA", ref: "C5", value: 0.2, type: "percentage" }],
+        columns: [
+          {
+            header: "Produit",
+            type: "text",
+            formula: null,
+            formula_en: null,
+            validation: { type: "list", ref_table: "RefProduits", ref_column: "Produit" },
+          },
+          { header: "Total", type: "currency", formula: "=10", formula_en: "=10" },
+        ],
+        reference_tables: [
+          {
+            name: "Produits",
+            sheet_name: "RefProduits",
+            start_ref: "RefProduits!A1",
+            headers: ["Produit", "Prix"],
+            rows: [["PC", 1000]],
+          },
+        ],
+      };
+
+      const parsed = validateSchema(schema);
+      expect(parsed.columns[0].validation?.type).toBe("list");
+      expect(parsed.columns[0].validation?.ref_table).toBe("RefProduits");
+    });
+
     it("devrait lever une erreur si row_total_column défini mais aucune colonne sommable", () => {
       const raw = {
         type: "complex_table",
