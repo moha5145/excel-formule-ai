@@ -256,3 +256,43 @@ export function validateSchema(raw: unknown): TableSchema {
 export function isComplexResponse(markdown: string): boolean {
   return SCHEMA_REGEX.test(markdown);
 }
+
+export const NewColumnSchema = z.object({
+  header: z.string().min(1, "En-tête de colonne requis"),
+  type: z.enum(["text", "currency", "percentage", "integer", "number", "date"]).default("number"),
+  formula: z.string().min(1, "Formule requise"),
+  formula_en: z.string().optional(),
+  description: z.string().optional(),
+});
+
+export const FileModificationSchema = z.object({
+  target_sheet: z.string().optional(),
+  new_columns: z.array(NewColumnSchema).min(1, "Au moins une nouvelle colonne requise"),
+});
+
+export type FileModification = z.infer<typeof FileModificationSchema>;
+
+const FILE_MODIFICATION_REGEX = /<!--\s*FILE_MODIFICATION:\s*(\{[\s\S]*?\})\s*-->/;
+
+export function extractFileModificationSchema(response: string): unknown | null {
+  const match = response.match(FILE_MODIFICATION_REGEX);
+  if (!match) return null;
+  try {
+    return JSON.parse(match[1]);
+  } catch {
+    return null;
+  }
+}
+
+export function validateFileModificationSchema(raw: unknown): FileModification {
+  const result = FileModificationSchema.safeParse(raw);
+  if (!result.success) {
+    throw new SchemaValidationError(result.error.issues, raw);
+  }
+  return result.data;
+}
+
+export function isFileModificationResponse(markdown: string): boolean {
+  return FILE_MODIFICATION_REGEX.test(markdown);
+}
+

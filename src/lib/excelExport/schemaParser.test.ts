@@ -4,6 +4,8 @@ import {
   validateSchema,
   isComplexResponse,
   SchemaValidationError,
+  extractFileModificationSchema,
+  validateFileModificationSchema,
 } from "./schemaParser";
 
 describe("schemaParser", () => {
@@ -196,6 +198,27 @@ describe("schemaParser", () => {
         row_total_column: { header: "Total" },
       };
       expect(() => validateSchema(raw)).toThrow(SchemaValidationError);
+    });
+  });
+
+  describe("FileModificationSchema", () => {
+    it("devrait extraire et valider un schéma de modification de fichier", () => {
+      const response = `
+      J'ai calculé la TVA pour votre tableau.
+      <!-- FILE_MODIFICATION: {
+        "target_sheet": "Feuille1",
+        "new_columns": [
+          { "header": "TVA 20%", "type": "currency", "formula": "=C{row}*0.2", "formula_en": "=C{row}*0.2" }
+        ]
+      } -->
+      `;
+
+      const raw = extractFileModificationSchema(response);
+      expect(raw).not.toBeNull();
+      const validated = validateFileModificationSchema(raw);
+      expect(validated.target_sheet).toBe("Feuille1");
+      expect(validated.new_columns).toHaveLength(1);
+      expect(validated.new_columns[0].header).toBe("TVA 20%");
     });
   });
 });
