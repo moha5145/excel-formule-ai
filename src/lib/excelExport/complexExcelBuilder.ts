@@ -225,12 +225,19 @@ function resolveColumnValidationRange(
   return null;
 }
 
+export interface CustomExportData {
+  paramValues?: Record<string, string | number>;
+  rowValues?: Record<string, string | number>[];
+  sampleRows?: number;
+}
+
 export function buildComplexWorkbook(
   workbook: ExcelJS.Workbook,
   schema: TableSchema,
   response: string,
   prompt: string,
-  format: ExportFormat
+  format: ExportFormat,
+  customData?: CustomExportData
 ): BuildResult {
   const warnings: string[] = [];
 
@@ -311,6 +318,10 @@ export function buildComplexWorkbook(
       valCell.alignment = { vertical: "middle", horizontal: "right" };
 
       // Écrire la valeur OU la formule
+      const cleanRef = cellRef.replace(/\$/g, "");
+      const customParamVal = customData?.paramValues?.[cellRef] ?? customData?.paramValues?.[cleanRef];
+      const effectiveParamVal = customParamVal !== undefined ? customParamVal : param.value;
+
       if (isCalculated) {
         // Paramètre calculé : injecter la formule via ExcelJS.
         // TableParameter n'expose pas formula_en (contrairement à TableColumn),
@@ -320,10 +331,10 @@ export function buildComplexWorkbook(
         const resolved = resolveFormulaTemplate(param.formula!, 1, format, false);
         valCell.value = { formula: resolved.replace(/^=/, "") };
       } else if (param.type === "text") {
-        valCell.value = String(param.value ?? "");
+        valCell.value = String(effectiveParamVal ?? "");
         valCell.alignment = { vertical: "middle", horizontal: "left" };
       } else {
-        setCellValueByType(valCell, param.type, param.value);
+        setCellValueByType(valCell, param.type, effectiveParamVal);
       }
 
       // Appliquer le format numérique selon le type
@@ -407,7 +418,7 @@ export function buildComplexWorkbook(
   }
 
   // Écriture des lignes de données
-  const sampleRowsCount = schema.sample_rows || 3;
+  const sampleRowsCount = customData?.sampleRows ?? schema.sample_rows ?? 3;
   for (let r = 0; r < sampleRowsCount; r++) {
     const currRowIndex = startRow + 1 + r;
     const row = sheetInteractif.getRow(currRowIndex);
@@ -444,7 +455,29 @@ export function buildComplexWorkbook(
       } else {
         // Colonne input
         let val: string | number | undefined = undefined;
-        if (mdTable && colMappings[c] !== -1 && mdTable.rows[r]) {
+
+        // 1. Priorité aux valeurs personnalisées saisies par l'utilisateur dans le simulateur
+        if (customData?.rowValues?.[r]?.[col.header] !== undefined && customData.rowValues[r][col.header] !== "") {
+          const rawCustom = customData.rowValues[r][col.header];
+          if (typeof rawCustom === "number") {
+            val = rawCustom;
+          } else {
+            const rawStr = String(rawCustom).trim();
+            const hasPercent = /%/.test(rawStr);
+            const cleaned = rawStr
+              .replace(/\s/g, "")
+              .replace(/%/g, "")
+              .replace(/€|euro/gi, "")
+              .replace(",", ".");
+            const num = Number(cleaned);
+            if (!isNaN(num) && cleaned !== "") {
+              val = hasPercent ? num / 100 : num;
+            } else {
+              val = rawStr;
+            }
+          }
+        } else if (mdTable && colMappings[c] !== -1 && mdTable.rows[r]) {
+          // 2. Fallback aux données d'exemple du Markdown
           const rawStr = mdTable.rows[r][colMappings[c]]?.trim() || "";
           if (rawStr) {
             const hasPercent = /%/.test(rawStr);
@@ -620,12 +653,23 @@ export function buildComplexWorkbook(
   regenCell.font = { name: "Segoe UI", size: 9, italic: true, color: { argb: "FF2563EB" } };
   sheetInteractif.getRow(regenRowIndex).height = 28;
 
-  // Largeurs colonnes Tableau Interactif
+  // Largeurs colonnes Tableau Interactif (dynamiques)
   sheetInteractif.getColumn(1).width = 4;
-  sheetInteractif.getColumn(2).width = 24;
-  const totalDataCols = numCols + (rowTotal ? 1 : 0);
-  for (let c = 3; c <= 3 + totalDataCols + 1; c++) {
-    sheetInteractif.getColumn(c).width = 18;
+  sheetInteractif.getColumn(2).width = 16;
+  for (let c = 0; c < numCols; c++) {
+    const col = schema.columns[c];
+    let maxLen = col.header.length;
+    for (let r = 0; r < sampleRowsCount; r++) {
+      const customVal = customData?.rowValues?.[r]?.[col.header];
+      const mdVal = mdTable?.rows[r]?.[colMappings[c]];
+      const valStr = String(customVal ?? mdVal ?? "");
+      maxLen = Math.max(maxLen, valStr.length);
+    }
+    const computedWidth = Math.max(14, Math.min(maxLen + 4, 38));
+    sheetInteractif.getColumn(3 + c).width = computedWidth;
+  }
+  if (rowTotal) {
+    sheetInteractif.getColumn(rowTotalColIndex).width = Math.max(16, rowTotal.header.length + 4);
   }
 
   // --- ONGLET(S) : DONNÉES DE RÉFÉRENCE (lookup tables) ---

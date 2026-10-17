@@ -10,8 +10,9 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { Menu, Copy, FileSpreadsheet, ChevronDown, Code2, Check, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import type { ExportFormat } from "@/lib/excelExport";
+import type { ExportFormat, CustomExportData } from "@/lib/excelExport";
 import { downloadFormulaAsExcel, normalizeTablesInResponse } from "@/lib/excelExport";
+import { convertSimpleTableToSchema } from "@/lib/excelExport/simpleTableBridge";
 import { buildTextRepresentation } from "@/lib/fileParser";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -302,10 +303,10 @@ export default function Home() {
     toast.success("Fichier de formule téléchargé !");
   }, []);
 
-  const handleDownloadExcel = useCallback(async (content: string, promptForFile: string, mode?: GenerationMode) => {
+  const handleDownloadExcel = useCallback(async (content: string, promptForFile: string, mode?: GenerationMode, customData?: CustomExportData) => {
     if (!content) return;
     try {
-      const { warnings } = await downloadFormulaAsExcel(content, promptForFile || "formule", exportFormat, mode);
+      const { warnings } = await downloadFormulaAsExcel(content, promptForFile || "formule", exportFormat, mode, customData);
       if (warnings.length > 0) {
         toast.warning("Excel généré, mais avec des avertissements — si une colonne manque, Régénérez.", {
           description: warnings.slice(0, 2).join(" ; "),
@@ -740,6 +741,13 @@ export default function Home() {
 
                   const msgFileContext = msg.fileContext || fileContext;
 
+                  // Si pas de TABLE_SCHEMA complexe explicite et pas de modification de fichier,
+                  // on tente de créer un schéma virtuel pour les tableaux simples
+                  const simpleSchemaObj = !schemaObj && !fileModifObj && msg.role === "model"
+                    ? convertSimpleTableToSchema(msg.content, msg.userPrompt || "Calcul")
+                    : null;
+                  const effectiveSchemaObj = schemaObj || simpleSchemaObj;
+
                   return (
                     <div key={idx} className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start w-full"}`}>
                       <div className={`${msg.role === "user"
@@ -773,12 +781,13 @@ export default function Home() {
                               {normalizeMarkdownBlocks(displayMarkdown)}
                             </ReactMarkdown>
 
-                            {(schemaObj || fileModifObj) && (
+                            {(effectiveSchemaObj || fileModifObj) && (
                               <ComplexTablePreview
-                                rawSchema={schemaObj}
+                                rawSchema={effectiveSchemaObj}
                                 fileModification={fileModifObj}
                                 fileContext={msgFileContext}
-                                onDownloadExcel={() => handleDownloadExcel(msg.content, msg.userPrompt || "", msg.generationMode)}
+                                markdownResponse={msg.content}
+                                onDownloadExcel={(customData) => handleDownloadExcel(msg.content, msg.userPrompt || "", msg.generationMode, customData)}
                                 onDownloadModifiedFile={
                                   msgFileContext?.rawBuffer
                                     ? () => handleDownloadModifiedFile(msgFileContext, msg.content)
@@ -787,7 +796,7 @@ export default function Home() {
                               />
                             )}
 
-                            {msgFileContext?.rawBuffer && !schemaObj && !fileModifObj && (
+                            {msgFileContext?.rawBuffer && !effectiveSchemaObj && !fileModifObj && (
                               <div className="mt-3 p-3 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 flex flex-wrap items-center justify-between gap-2 not-prose">
                                 <div className="flex items-center gap-2 text-xs text-emerald-800 dark:text-emerald-300">
                                   <FileSpreadsheet className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />

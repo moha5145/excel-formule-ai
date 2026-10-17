@@ -467,4 +467,40 @@ describe("complexExcelBuilder", () => {
     expect(cell.dataValidation?.type).toBe("list");
     expect(cell.dataValidation?.formulae).toEqual(["RefProduits!$A$2:$A$5"]);
   });
+
+  it("devrait injecter les valeurs saisies par l'utilisateur (customData) au lieu des données brutes", () => {
+    const schema: TableSchema = {
+      type: "complex_table",
+      title: "Test Custom Data",
+      parameters: [{ name: "Taux", ref: "C5", value: 0.1, type: "percentage" }],
+      columns: [
+        { header: "Montant", type: "currency", formula: null, formula_en: null },
+        { header: "Total", type: "currency", formula: "=C{row}*(1+$C$5)", formula_en: "=C{row}*(1+$C$5)" },
+      ],
+      data_start_row: 10,
+      sample_rows: 2,
+    };
+
+    const customData = {
+      paramValues: { C5: 0.25 },
+      rowValues: [
+        { Montant: 500 },
+        { Montant: 1200 },
+        { Montant: 3000 },
+      ],
+      sampleRows: 3,
+    };
+
+    const wb = new ExcelJS.Workbook();
+    const { workbook } = buildComplexWorkbook(wb, schema, "", "Prompt", "libreoffice-fr", customData);
+
+    const sheet = workbook.getWorksheet("Tableau Interactif")!;
+    // Paramètre mis à jour
+    expect(sheet.getCell("C5").value).toBe(0.25);
+    // Données des 3 lignes
+    expect(sheet.getCell("C11").value).toBe(500);
+    expect(sheet.getCell("C12").value).toBe(1200);
+    expect(sheet.getCell("C13").value).toBe(3000);
+  });
 });
+

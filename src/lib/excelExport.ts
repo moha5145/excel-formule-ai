@@ -2,8 +2,9 @@ import ExcelJS from "exceljs";
 import JSZip from "jszip";
 import { type ExportFormat, postProcessFormula, convertToUsInvariant } from "./excelExport/postProcessFormula";
 import { isComplexResponse, extractTableSchema, validateSchema, SchemaValidationError } from "./excelExport/schemaParser";
-import { buildComplexWorkbook } from "./excelExport/complexExcelBuilder";
-export type { ExportFormat };
+import { buildComplexWorkbook, type CustomExportData } from "./excelExport/complexExcelBuilder";
+import { convertSimpleTableToSchema } from "./excelExport/simpleTableBridge";
+export type { ExportFormat, CustomExportData };
 
 // Nettoie la syntaxe Markdown pour l'affichage brut en cellule Excel
 function cleanMarkdownFormatting(text: string): string {
@@ -361,7 +362,8 @@ export async function downloadFormulaAsExcel(
   response: string,
   prompt: string,
   format: ExportFormat = "libreoffice-fr",
-  mode?: "formula_only" | "simple_table" | "complex_table"
+  mode?: "formula_only" | "simple_table" | "complex_table",
+  customData?: CustomExportData
 ): Promise<{ warnings: string[] }> {
   // Auto-détection du mode complexe : si la réponse contient un TABLE_SCHEMA valide et que le mode
   // n'est PAS formula_only, on utilise le chemin complexe — même si l'UI était en simple_table.
@@ -377,7 +379,7 @@ export async function downloadFormulaAsExcel(
       try {
         const schema = validateSchema(rawSchema);
         const workbook = new ExcelJS.Workbook();
-        const { workbook: built, warnings } = buildComplexWorkbook(workbook, schema, response, prompt, format);
+        const { workbook: built, warnings } = buildComplexWorkbook(workbook, schema, response, prompt, format, customData);
         if (warnings.length > 0) {
           console.warn("Complex export warnings:", warnings);
         }
@@ -393,6 +395,23 @@ export async function downloadFormulaAsExcel(
           );
         }
         throw e;
+      }
+    }
+  }
+
+  // Si aucun TABLE_SCHEMA complexe n'est présent mais que le mode n'est pas formula_only,
+  // on tente d'utiliser simpleTableBridge pour générer un classeur interactif moderne et fidèle
+  if (mode !== "formula_only") {
+    const simpleSchema = convertSimpleTableToSchema(response, prompt);
+    if (simpleSchema) {
+      try {
+        const workbook = new ExcelJS.Workbook();
+        const { workbook: built, warnings } = buildComplexWorkbook(workbook, simpleSchema, response, prompt, format, customData);
+        const blob = await patchWorkbookForceCalc(built);
+        triggerFileDownload(blob, prompt);
+        return { warnings };
+      } catch (err) {
+        console.warn("Export via simpleTableBridge a échoué, repli sur l'export standard", err);
       }
     }
   }
