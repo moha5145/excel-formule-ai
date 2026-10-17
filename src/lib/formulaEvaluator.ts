@@ -14,7 +14,7 @@ interface Token {
 function tokenize(expr: string): Token[] {
   const tokens: Token[] = [];
   let i = 0;
-  const s = expr.trim().replace(/^=/, "");
+  const s = expr.trim().replace(/^=+/, "");
 
   while (i < s.length) {
     const ch = s[i];
@@ -168,6 +168,9 @@ class Parser {
       const op = this.consume().value;
       const right = this.parseAdditive();
 
+      if (typeof left === "string" && left.startsWith("#")) return left;
+      if (typeof right === "string" && right.startsWith("#")) return right;
+
       if (op === "<") left = left < right;
       else if (op === ">") left = left > right;
       else if (op === "<=") left = left <= right;
@@ -185,6 +188,11 @@ class Parser {
     while (this.peek() && (this.peek()!.value === "+" || this.peek()!.value === "-")) {
       const op = this.consume().value;
       const right = this.parseMultiplicative();
+
+      // Propagation des erreurs Excel (ne jamais concaténer d'erreurs en string)
+      if (typeof left === "string" && left.startsWith("#")) return left;
+      if (typeof right === "string" && right.startsWith("#")) return right;
+
       if (op === "+") {
         left = typeof left === "string" || typeof right === "string"
           ? String(left) + String(right)
@@ -203,6 +211,11 @@ class Parser {
     while (this.peek() && (this.peek()!.value === "*" || this.peek()!.value === "/")) {
       const op = this.consume().value;
       const right = this.parseUnary();
+
+      // Propagation des erreurs
+      if (typeof left === "string" && left.startsWith("#")) return left;
+      if (typeof right === "string" && right.startsWith("#")) return right;
+
       if (op === "*") {
         left = Number(left) * Number(right);
       } else {
@@ -218,6 +231,7 @@ class Parser {
     if (this.peek() && (this.peek()!.value === "+" || this.peek()!.value === "-")) {
       const op = this.consume().value;
       const val = this.parseUnary();
+      if (typeof val === "string" && val.startsWith("#")) return val;
       return op === "-" ? -Number(val) : Number(val);
     }
     return this.parsePrimary();
@@ -341,6 +355,19 @@ class Parser {
         const cond = Boolean(args[0]);
         return cond ? args[1] : (args[2] ?? 0);
       }
+      case "IFERROR":
+      case "SIERREUR": {
+        const val = args[0];
+        if (
+          val === undefined ||
+          val === null ||
+          (typeof val === "string" && val.startsWith("#")) ||
+          (typeof val === "number" && !isFinite(val))
+        ) {
+          return args[1] ?? 0;
+        }
+        return val;
+      }
       case "SUM":
       case "SOMME": {
         return args.reduce((acc, curr) => acc + (Number(curr) || 0), 0);
@@ -369,12 +396,77 @@ class Parser {
       case "ABS": {
         return Math.abs(Number(args[0]) || 0);
       }
+      case "INT":
+      case "ENT": {
+        return Math.floor(Number(args[0]) || 0);
+      }
       case "PRODUCT":
       case "PRODUIT": {
         return args.reduce((acc, curr) => acc * (Number(curr) || 0), 1);
       }
+      // Fonctions financières
+      case "PMT":
+      case "VPM": {
+        const rate = Number(args[0]) || 0;
+        const nper = Number(args[1]) || 0;
+        const pv = Number(args[2]) || 0;
+        const fv = Number(args[3]) || 0;
+        const type = Number(args[4]) || 0;
+        if (rate === 0) return -(pv + fv) / nper;
+        const pvif = Math.pow(1 + rate, nper);
+        let pmt = (rate / (pvif - 1)) * -(pv * pvif + fv);
+        if (type === 1) pmt /= (1 + rate);
+        return pmt;
+      }
+      case "PV":
+      case "VA": {
+        const rate = Number(args[0]) || 0;
+        const nper = Number(args[1]) || 0;
+        const pmt = Number(args[2]) || 0;
+        const fv = Number(args[3]) || 0;
+        const type = Number(args[4]) || 0;
+        if (rate === 0) return -pmt * nper - fv;
+        const pvif = Math.pow(1 + rate, nper);
+        return -(fv + (type === 1 ? pmt * (1 + rate) : pmt) * ((pvif - 1) / rate)) / pvif;
+      }
+      case "FV":
+      case "VC": {
+        const rate = Number(args[0]) || 0;
+        const nper = Number(args[1]) || 0;
+        const pmt = Number(args[2]) || 0;
+        const pv = Number(args[3]) || 0;
+        const type = Number(args[4]) || 0;
+        if (rate === 0) return -pv - pmt * nper;
+        const pvif = Math.pow(1 + rate, nper);
+        return -pv * pvif - (type === 1 ? pmt * (1 + rate) : pmt) * ((pvif - 1) / rate);
+      }
+      case "NPER":
+      case "NPM": {
+        const rate = Number(args[0]) || 0;
+        const pmt = Number(args[1]) || 0;
+        const pv = Number(args[2]) || 0;
+        const fv = Number(args[3]) || 0;
+        const type = Number(args[4]) || 0;
+        if (rate === 0) return -(pv + fv) / pmt;
+        const z = type === 1 ? pmt * (1 + rate) : pmt;
+        return Math.log((z - fv * rate) / (z + pv * rate)) / Math.log(1 + rate);
+      }
+      // Fonctions logiques
+      case "AND":
+      case "ET": {
+        return args.every(Boolean);
+      }
+      case "OR":
+      case "OU": {
+        return args.some(Boolean);
+      }
+      case "NOT":
+      case "NON": {
+        return !Boolean(args[0]);
+      }
+      // Si la fonction n'est pas encore émulée, on lève une exception dédiée
       default:
-        throw new Error("#VALEUR!");
+        throw new Error("#UNSUPPORTED:" + name);
     }
   }
 
@@ -387,8 +479,21 @@ class Parser {
       if (typeof val === "number") return val;
       if (typeof val === "boolean") return val;
       if (val === null || val === undefined) return 0;
-      const num = Number(String(val).replace(/\s/g, "").replace(/,/g, "."));
-      return isNaN(num) ? val : num;
+      
+      const str = String(val).trim();
+      if (str === "") return 0;
+      if (str.startsWith("#")) return str; // Propagation directe d'erreur
+
+      // Parser les formats avec %, €, espaces et virgules
+      const hasPercent = str.includes("%");
+      const cleaned = str
+        .replace(/\s/g, "")
+        .replace(/€|euro/gi, "")
+        .replace(/%/g, "")
+        .replace(/,/g, ".");
+      const num = parseFloat(cleaned);
+      if (isNaN(num)) return str;
+      return hasPercent ? num / 100 : num;
     }
 
     return 0;
@@ -397,7 +502,7 @@ class Parser {
 
 export function evaluateFormula(formula: string, context: EvaluationContext = {}): number | string | boolean {
   if (!formula || typeof formula !== "string") return 0;
-  const clean = formula.trim().replace(/^=/, "");
+  const clean = formula.trim().replace(/^=+/, "");
   if (!clean) return 0;
 
   try {
@@ -405,6 +510,7 @@ export function evaluateFormula(formula: string, context: EvaluationContext = {}
     const parser = new Parser(tokens, context);
     const res = parser.parse();
     if (typeof res === "number") {
+      if (isNaN(res)) return "#VALEUR!";
       if (!isFinite(res)) return "#DIV/0!";
       // Arrondir résidu flottant
       return Math.round(res * 100000000) / 100000000;
@@ -412,6 +518,9 @@ export function evaluateFormula(formula: string, context: EvaluationContext = {}
     return res;
   } catch (err: unknown) {
     const msg = (err as Error).message;
+    if (msg.startsWith("#UNSUPPORTED:")) {
+      return "#CALC_EXCEL";
+    }
     if (msg.startsWith("#")) return msg;
     return "#VALEUR!";
   }

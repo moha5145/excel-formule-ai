@@ -26,8 +26,34 @@ describe("formulaEvaluator", () => {
     expect(evaluateFormula("C{row} * (1 + $C$5)", context)).toBe(300);
   });
 
-  it("devrait supporter les pourcentages (ex: 20% -> 0.2)", () => {
+  it("devrait supporter les pourcentages (ex: 20% -> 0.2) et les cellules contenant des chaînes avec %", () => {
     expect(evaluateFormula("100 * 20%", {})).toBe(20);
+
+    const context = {
+      row: 10,
+      cells: {
+        C10: "200 000 €",
+        F10: "0,36%",
+      },
+    };
+    // (200000 * 0.0036) / 12 = 720 / 12 = 60
+    expect(evaluateFormula("=(C{row} * F{row}) / 12", context)).toBe(60);
+  });
+
+  it("devrait supporter la fonction VPM / PMT avec un unaire moins comme =-VPM(...)", () => {
+    const context = {
+      row: 10,
+      cells: {
+        C10: 200000,
+        D10: "3,5%",
+        E10: 20,
+      },
+    };
+
+    // Mensualité pour 200k€ à 3.5% sur 20 ans
+    const result = evaluateFormula("=-VPM(D{row}/12; E{row}*12; C{row})", context);
+    expect(typeof result).toBe("number");
+    expect(Number(result)).toBeCloseTo(1159.92, 1);
   });
 
   it("devrait supporter la fonction IF / SI", () => {
@@ -60,8 +86,24 @@ describe("formulaEvaluator", () => {
     expect(evaluateFormula("SUM(C1:E1)", context)).toBe(60);
   });
 
-  it("devrait retourner une chaîne d'erreur propre en cas de division par zéro ou syntaxe inconnue", () => {
+  it("devrait propager proprement les erreurs sans les concaténer en chaîne de caractères", () => {
+    const context = {
+      row: 10,
+      cells: {
+        G10: "#VALEUR!",
+        H10: 60,
+      },
+    };
+
+    // Avant le fix, cela donnait "#VALEUR!60" ou "#VALEUR!#DIV/0!"
+    expect(evaluateFormula("=G{row} + H{row}", context)).toBe("#VALEUR!");
+  });
+
+  it("devrait renvoyer #CALC_EXCEL pour les fonctions complexes non émulées", () => {
+    expect(evaluateFormula("=SOME_COMPLEX_EXCEL_FUNC(1, 2)", {})).toBe("#CALC_EXCEL");
+  });
+
+  it("devrait renvoyer #DIV/0! en cas de vraie division par zéro", () => {
     expect(evaluateFormula("10 / 0", {})).toBe("#DIV/0!");
-    expect(evaluateFormula("UNKNOWN_FUNC(1, 2)", {})).toBe("#VALEUR!");
   });
 });
