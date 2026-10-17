@@ -1,7 +1,7 @@
 # Plan d'implémentation : Amélioration Majeure des Tableaux Simples et Complexes (Génération, Simulation & Export)
 
 > **Date :** 17 Octobre 2026  
-> **Statut :** Prêt pour exécution  
+> **Statut :** Terminé et validé (58 tests passants, build OK)  
 > **Branche recommandée :** `feat/interactive-tables-and-export-sync`
 
 ---
@@ -58,7 +58,7 @@ Après la réussite de l'export fidèle des fichiers importés (in-place), l'att
 - Créer : `src/lib/formulaEvaluator.test.ts`
 - Créer : `src/lib/formulaEvaluator.ts`
 
-- [ ] **Étape 1 : Écrire le test unitaire pour les calculs arithmétiques et références relatives/absolues**
+- [x] **Étape 1 : Écrire le test unitaire pour les calculs arithmétiques et références relatives/absolues**
 
 Dans `src/lib/formulaEvaluator.test.ts` :
 ```typescript
@@ -123,13 +123,13 @@ describe("formulaEvaluator", () => {
 });
 ```
 
-- [ ] **Étape 2 : Exécuter le test pour vérifier l'échec initial**
+- [x] **Étape 2 : Exécuter le test pour vérifier l'échec initial**
 ```bash
 npx vitest run src/lib/formulaEvaluator.test.ts
 ```
 *Attendu : Échec car `src/lib/formulaEvaluator.ts` n'existe pas encore.*
 
-- [ ] **Étape 3 : Implémenter le moteur d'évaluation dans `src/lib/formulaEvaluator.ts`**
+- [x] **Étape 3 : Implémenter le moteur d'évaluation dans `src/lib/formulaEvaluator.ts`**
 
 Créer `src/lib/formulaEvaluator.ts` :
 ```typescript
@@ -460,13 +460,13 @@ export function evaluateFormula(formula: string, context: EvaluationContext = {}
 }
 ```
 
-- [ ] **Étape 4 : Exécuter le test pour vérifier le succès**
+- [x] **Étape 4 : Exécuter le test pour vérifier le succès**
 ```bash
 npx vitest run src/lib/formulaEvaluator.test.ts
 ```
 *Attendu : PASS.*
 
-- [ ] **Étape 5 : Commit**
+- [x] **Étape 5 : Commit**
 ```bash
 git add src/lib/formulaEvaluator.ts src/lib/formulaEvaluator.test.ts
 git commit -m "feat(evaluator): moteur d'évaluation de formules pour simulateur interactif"
@@ -481,12 +481,12 @@ git commit -m "feat(evaluator): moteur d'évaluation de formules pour simulateur
 **Fichiers :**
 - Modifier : `src/components/ComplexTablePreview.tsx`
 
-- [ ] **Étape 1 : Analyser les besoins de `ComplexTablePreview`**
+- [x] **Étape 1 : Analyser les besoins de `ComplexTablePreview`**
   1. Pré-remplir `inputValues` avec les données d'exemple du Markdown si la table existe.
   2. Créer une fonction de calcul qui construit le dictionnaire `cells` (paramètres `$C$5` et inputs `C10`, `D10`...) et résout chaque colonne calculée via `evaluateFormula`.
   3. Mettre à jour l'état en direct dès que l'utilisateur tape une valeur dans un champ d'entrée.
 
-- [ ] **Étape 2 : Mettre à jour `ComplexTablePreview.tsx`**
+- [x] **Étape 2 : Mettre à jour `ComplexTablePreview.tsx`**
 
 Dans `src/components/ComplexTablePreview.tsx` :
 - Importer `evaluateFormula` depuis `@/lib/formulaEvaluator`.
@@ -544,13 +544,13 @@ onDownloadExcel({
 });
 ```
 
-- [ ] **Étape 3 : Tester les composants avec Vitest**
+- [x] **Étape 3 : Tester les composants avec Vitest**
 ```bash
 npx vitest run
 ```
 *Attendu : Tous les tests passent.*
 
-- [ ] **Étape 4 : Commit**
+- [x] **Étape 4 : Commit**
 ```bash
 git add src/components/ComplexTablePreview.tsx
 git commit -m "feat(preview): calcul en direct des formules et pré-remplissage des exemples"
@@ -566,7 +566,7 @@ git commit -m "feat(preview): calcul en direct des formules et pré-remplissage 
 - Créer : `src/lib/excelExport/simpleTableBridge.ts`
 - Créer : `src/lib/excelExport/simpleTableBridge.test.ts`
 
-- [ ] **Étape 1 : Écrire le test unitaire pour `convertSimpleTableToSchema`**
+- [x] **Étape 1 : Écrire le test unitaire pour `convertSimpleTableToSchema`**
 
 Dans `src/lib/excelExport/simpleTableBridge.test.ts` :
 ```typescript
@@ -619,12 +619,12 @@ Voici votre formule de calcul de TVA :
 });
 ```
 
-- [ ] **Étape 2 : Exécuter le test pour vérifier l'échec**
+- [x] **Étape 2 : Exécuter le test pour vérifier l'échec**
 ```bash
 npx vitest run src/lib/excelExport/simpleTableBridge.test.ts
 ```
 
-- [ ] **Étape 3 : Implémenter `convertSimpleTableToSchema` dans `src/lib/excelExport/simpleTableBridge.ts`**
+- [x] **Étape 3 : Implémenter `convertSimpleTableToSchema` dans `src/lib/excelExport/simpleTableBridge.ts`**
 
 Créer `src/lib/excelExport/simpleTableBridge.ts` :
 ```typescript
@@ -705,13 +705,13 @@ export function convertSimpleTableToSchema(response: string, promptTitle: string
 }
 ```
 
-- [ ] **Étape 4 : Exécuter le test pour vérifier le succès**
+- [x] **Étape 4 : Exécuter le test pour vérifier le succès**
 ```bash
 npx vitest run src/lib/excelExport/simpleTableBridge.test.ts
 ```
 *Attendu : PASS.*
 
-- [ ] **Étape 5 : Brancher dans `src/app/page.tsx` pour activer le simulateur en mode simple**
+- [x] **Étape 5 : Brancher dans `src/app/page.tsx` pour activer le simulateur en mode simple**
 
 Dans `src/app/page.tsx` :
 Détecter si un schéma simple existe lorsque `!schemaObj && !fileModifObj` :
@@ -723,7 +723,7 @@ const simpleSchema = useMemo(() => {
 ```
 Afficher le simulateur `ComplexTablePreview` avec `rawSchema={schemaObj || simpleSchema}` !
 
-- [ ] **Étape 6 : Commit**
+- [x] **Étape 6 : Commit**
 ```bash
 git add src/lib/excelExport/simpleTableBridge.ts src/lib/excelExport/simpleTableBridge.test.ts src/app/page.tsx
 git commit -m "feat(simple-table): pont simple TableSchema et affichage du simulateur pour cas simples"
@@ -740,7 +740,7 @@ git commit -m "feat(simple-table): pont simple TableSchema et affichage du simul
 - Modifier : `src/lib/excelExport/complexExcelBuilder.test.ts`
 - Modifier : `src/lib/excelExport.ts`
 
-- [ ] **Étape 1 : Écrire le test unitaire pour `customData` et largeurs auto**
+- [x] **Étape 1 : Écrire le test unitaire pour `customData` et largeurs auto**
 
 Dans `src/lib/excelExport/complexExcelBuilder.test.ts` :
 ```typescript
@@ -780,12 +780,12 @@ it("devrait injecter les valeurs saisies par l'utilisateur (customData) au lieu 
 });
 ```
 
-- [ ] **Étape 2 : Exécuter le test pour vérifier l'échec**
+- [x] **Étape 2 : Exécuter le test pour vérifier l'échec**
 ```bash
 npx vitest run src/lib/excelExport/complexExcelBuilder.test.ts
 ```
 
-- [ ] **Étape 3 : Mettre à jour `buildComplexWorkbook` dans `src/lib/excelExport/complexExcelBuilder.ts`**
+- [x] **Étape 3 : Mettre à jour `buildComplexWorkbook` dans `src/lib/excelExport/complexExcelBuilder.ts`**
 
 1. Étendre la signature avec `customData?: CustomExportData`.
 2. Pour les paramètres : si `customData?.paramValues?.[param.ref]` existe, l'utiliser en priorité.
@@ -807,17 +807,17 @@ for (let c = 0; c < numCols; c++) {
 }
 ```
 
-- [ ] **Étape 4 : Mettre à jour `downloadFormulaAsExcel` dans `src/lib/excelExport.ts`**
+- [x] **Étape 4 : Mettre à jour `downloadFormulaAsExcel` dans `src/lib/excelExport.ts`**
 
 Accepter `customData` et le transmettre à `buildComplexWorkbook`.
 
-- [ ] **Étape 5 : Exécuter tous les tests**
+- [x] **Étape 5 : Exécuter tous les tests**
 ```bash
 npx vitest run
 ```
 *Attendu : Tous les tests passent (100%).*
 
-- [ ] **Étape 6 : Commit**
+- [x] **Étape 6 : Commit**
 ```bash
 git add src/lib/excelExport/complexExcelBuilder.ts src/lib/excelExport/complexExcelBuilder.test.ts src/lib/excelExport.ts
 git commit -m "feat(export): prise en compte des modifications du simulateur et largeurs dynamiques"
@@ -827,19 +827,19 @@ git commit -m "feat(export): prise en compte des modifications du simulateur et 
 
 ### Phase 5 : Validation Finale & Tests de Bout en Bout
 
-- [ ] **Étape 1 : Exécuter l'ensemble des tests unitaires**
+- [x] **Étape 1 : Exécuter l'ensemble des tests unitaires**
 ```bash
 npx vitest run
 ```
 *Attendu : 50+ tests passants sans avertissement.*
 
-- [ ] **Étape 2 : Valider le build Next.js**
+- [x] **Étape 2 : Valider le build Next.js**
 ```bash
 npm run build
 ```
 *Attendu : Build réussi sans erreur TypeScript ou linting.*
 
-- [ ] **Étape 3 : Mettre à jour la base de connaissances graphify**
+- [x] **Étape 3 : Mettre à jour la base de connaissances graphify**
 ```bash
 graphify update .
 ```
