@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import {
   type TableSchema,
   validateSchema,
@@ -10,19 +10,48 @@ import {
 import { type FileContext } from "@/components/FormulaAssistant";
 import { FileSpreadsheet, Plus, Download, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { evaluateFormula } from "@/lib/formulaEvaluator";
+import { extractTables } from "@/lib/excelExport";
+
+export interface CustomExportData {
+  paramValues?: Record<string, string | number>;
+  rowValues?: Record<string, string | number>[];
+  sampleRows?: number;
+}
 
 interface ComplexTablePreviewProps {
   rawSchema?: unknown;
   fileModification?: unknown;
   fileContext?: FileContext | null;
-  onDownloadExcel?: () => void;
+  markdownResponse?: string;
+  onDownloadExcel?: (customData?: CustomExportData) => void;
   onDownloadModifiedFile?: () => void;
+}
+
+function formatDisplayValue(val: unknown, type?: string): string {
+  if (val === undefined || val === null || val === "") return "—";
+  if (typeof val === "string" && val.startsWith("#")) return val;
+  const num = Number(val);
+  if (isNaN(num)) return String(val);
+
+  if (type === "currency") {
+    return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(num);
+  }
+  if (type === "percentage") {
+    const pctVal = num > 1 ? num / 100 : num;
+    return new Intl.NumberFormat("fr-FR", { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 2 }).format(pctVal);
+  }
+  if (type === "integer") {
+    return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(num);
+  }
+  return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 2 }).format(num);
 }
 
 export function ComplexTablePreview({
   rawSchema,
   fileModification,
   fileContext,
+  markdownResponse,
   onDownloadExcel,
   onDownloadModifiedFile,
 }: ComplexTablePreviewProps) {
@@ -60,7 +89,78 @@ export function ComplexTablePreview({
   const [paramValues, setParamValues] = useState<Record<number, string>>(() =>
     Object.fromEntries((schema?.parameters || []).map((p, i) => [i, String(p.value ?? "")]))
   );
+
+  // Pré-remplissage des inputs à partir des données Markdown de l'IA
+  const initialInputs = useMemo(() => {
+    const inputs: Record<string, string> = {};
+    if (!schema) return inputs;
+    const mdTables = markdownResponse ? extractTables(markdownResponse) : [];
+    const mdTable = mdTables[0];
+    if (!mdTable) return inputs;
+
+    const numCols = schema.columns.length;
+    for (let c = 0; c < numCols; c++) {
+      const col = schema.columns[c];
+      if (col.formula || col.formula_en) continue;
+
+      const colHeader = col.header.toLowerCase().trim();
+      let mdIdx = mdTable.headers.findIndex((h) => h.toLowerCase().trim() === colHeader);
+      if (mdIdx === -1) {
+        mdIdx = c + 1; // Fallback col 0 = "Ligne"
+      }
+
+      if (mdIdx !== -1) {
+        for (let r = 0; r < Math.min(mdTable.rows.length, 30); r++) {
+          const val = mdTable.rows[r]?.[mdIdx]?.trim();
+          if (val !== undefined && val !== "") {
+            inputs[`${r}-${c}`] = val;
+          }
+        }
+      }
+    }
+    return inputs;
+  }, [schema, markdownResponse]);
+
   const [inputValues, setInputValues] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (Object.keys(initialInputs).length > 0) {
+      setInputValues((prev) => ({ ...initialInputs, ...prev }));
+    }
+  }, [initialInputs]);
+
+  // Handler de téléchargement enrichi avec les valeurs du simulateur
+  const handleDownload = useCallback(() => {
+    if (!onDownloadExcel) return;
+    if (!schema) {
+      onDownloadExcel();
+      return;
+    }
+
+    const customParams: Record<string, string | number> = {};
+    schema.parameters.forEach((p, idx) => {
+      const cleanRef = p.ref.replace(/\$/g, "").toUpperCase();
+      const rawVal = paramValues[idx] ?? p.value;
+      const num = Number(String(rawVal).replace(/\s/g, "").replace(/,/g, "."));
+      customParams[cleanRef] = isNaN(num) ? String(rawVal) : num;
+    });
+
+    const customRows: Record<string, string | number>[] = [];
+    for (let r = 0; r < sampleRows; r++) {
+      const rowObj: Record<string, string | number> = {};
+      schema.columns.forEach((col, cIdx) => {
+        const key = `${r}-${cIdx}`;
+        rowObj[col.header] = inputValues[key] ?? "";
+      });
+      customRows.push(rowObj);
+    }
+
+    onDownloadExcel({
+      paramValues: customParams,
+      rowValues: customRows,
+      sampleRows,
+    });
+  }, [onDownloadExcel, schema, sampleRows, paramValues, inputValues]);
 
   // ── CAS A : Modification in-place sur fichier importé ──
   if (modifSchema) {
@@ -184,7 +284,7 @@ export function ComplexTablePreview({
           {onDownloadExcel && (
             <button
               type="button"
-              onClick={onDownloadExcel}
+              onClick={handleDownload}
               className="text-primary hover:underline font-medium cursor-pointer"
             >
               Télécharger comme maquette isolée
@@ -211,7 +311,7 @@ export function ComplexTablePreview({
         {onDownloadExcel && (
           <Button
             size="sm"
-            onClick={onDownloadExcel}
+            onClick={handleDownload}
             className="h-8 gap-1.5 text-xs rounded-xl shrink-0 cursor-pointer"
           >
             <Download className="h-3.5 w-3.5" />
@@ -228,7 +328,7 @@ export function ComplexTablePreview({
               className="flex items-center justify-between p-2 rounded-xl bg-background border border-border/50 text-xs gap-2"
             >
               <span className="text-muted-foreground font-medium truncate mr-2" title={param.name}>
-                {param.name}
+                {param.name} ({param.ref})
               </span>
               <input
                 type={
@@ -261,28 +361,69 @@ export function ComplexTablePreview({
             </tr>
           </thead>
           <tbody>
-            {Array.from({ length: sampleRows }).map((_, rIdx) => (
-              <tr key={rIdx} className="border-b border-border/40 hover:bg-muted/10">
-                <td className="p-2 text-center text-muted-foreground bg-muted/20 border-r border-border/40 font-mono">
-                  {rIdx + 1}
-                </td>
-                {schema.columns.map((col, cIdx) => {
-                  const isCalculated = Boolean(col.formula || col.formula_en);
-                  const key = `${rIdx}-${cIdx}`;
-                  return (
-                    <td
-                      key={cIdx}
-                      className={`p-2 border-r border-border/40 font-mono ${
-                        isCalculated
-                          ? "bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-300 font-semibold"
-                          : "bg-amber-50/40 dark:bg-amber-950/10"
-                      }`}
-                    >
-                      {isCalculated ? (
-                        <span className="opacity-80" title={col.formula || ""}>
-                          {col.formula || "Calculé"}
-                        </span>
-                      ) : (
+            {Array.from({ length: sampleRows }).map((_, rIdx) => {
+              const rowNumber = (schema.data_start_row || 10) + rIdx;
+
+              // Construction du dictionnaire de cellules pour cette ligne
+              const cellsMap: Record<string, any> = {};
+
+              // 1. Paramètres globaux ($C$5, C5...)
+              schema.parameters.forEach((param, pIdx) => {
+                const cleanRef = param.ref.replace(/\$/g, "").toUpperCase();
+                const rawVal = paramValues[pIdx] ?? param.value;
+                cellsMap[cleanRef] = rawVal;
+              });
+
+              // 2. Colonnes inputs de la ligne
+              schema.columns.forEach((_, cI) => {
+                const colLetter = String.fromCharCode(67 + cI); // C, D, E...
+                const key = `${rIdx}-${cI}`;
+                const val = inputValues[key] ?? "";
+                cellsMap[`${colLetter}${rowNumber}`] = val;
+              });
+
+              return (
+                <tr key={rIdx} className="border-b border-border/40 hover:bg-muted/10">
+                  <td className="p-2 text-center text-muted-foreground bg-muted/20 border-r border-border/40 font-mono">
+                    {rIdx + 1}
+                  </td>
+                  {schema.columns.map((col, cIdx) => {
+                    const isCalculated = Boolean(col.formula || col.formula_en);
+                    const key = `${rIdx}-${cIdx}`;
+
+                    if (isCalculated) {
+                      const formulaToEval = col.formula_en || col.formula || "";
+                      const evalResult = evaluateFormula(formulaToEval, {
+                        row: rowNumber,
+                        cells: cellsMap,
+                      });
+
+                      // Stocker aussi le résultat calculé dans le map pour les colonnes calculées suivantes sur la même ligne
+                      const colLetter = String.fromCharCode(67 + cIdx);
+                      cellsMap[`${colLetter}${rowNumber}`] = evalResult;
+
+                      return (
+                        <td
+                          key={cIdx}
+                          className="p-2 border-r border-border/40 font-mono bg-emerald-50/50 dark:bg-emerald-950/20"
+                        >
+                          <div className="flex flex-col">
+                            <span className="font-semibold text-emerald-700 dark:text-emerald-300">
+                              {formatDisplayValue(evalResult, col.type)}
+                            </span>
+                            <span className="text-[9px] text-muted-foreground/70 font-mono truncate" title={col.formula || ""}>
+                              {col.formula || "Calculé"}
+                            </span>
+                          </div>
+                        </td>
+                      );
+                    }
+
+                    return (
+                      <td
+                        key={cIdx}
+                        className="p-2 border-r border-border/40 font-mono bg-amber-50/40 dark:bg-amber-950/10"
+                      >
                         <input
                           type="text"
                           value={inputValues[key] ?? ""}
@@ -290,21 +431,21 @@ export function ComplexTablePreview({
                             setInputValues((prev) => ({ ...prev, [key]: e.target.value }))
                           }
                           placeholder="Saisir..."
-                          className="w-full bg-transparent border-0 focus:ring-0 focus:outline-none p-0 text-foreground"
+                          className="w-full bg-transparent border-0 focus:ring-0 focus:outline-none p-0 text-foreground font-mono"
                         />
-                      )}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
 
       <div className="p-2 bg-muted/30 border-t border-border/40 flex justify-between items-center text-[11px] text-muted-foreground">
         <span>
-          {schema.columns.length} colonnes ({schema.columns.filter((c) => c.formula).length} calculées)
+          {schema.columns.length} colonnes ({schema.columns.filter((c) => c.formula).length} calculées) · Calculs en direct
         </span>
         <button
           type="button"
