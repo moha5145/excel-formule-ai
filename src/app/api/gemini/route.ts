@@ -703,11 +703,15 @@ ${modeInstruction}`;
       parts: [{ text: msg.content }],
     }));
 
-    // Modèle par défaut : gemini-3.8-flash (stable, le plus avancé en date).
-    // Le sélecteur "Pro" a été retiré de l'UI — 2.5 Pro n'est pas nécessairement
-    // supérieur aux modèles Flash 3.x, et gemini-3.1-pro n'existe pas en v1beta (404 systématique).
-    // On garde modelChoice côté API pour rétro-compat mais on ignore sa valeur.
-    const selectedModel = "gemini-3.8-flash";
+    // Modèles ordonnés par préférence : gemini-3.8-flash → 3.6-flash → 3.1-flash → 2.5-flash.
+    // En cas de saturation (503), instabilité réseau (fetch failed) ou indisponibilité temporaire,
+    // le système bascule automatiquement sur le modèle suivant sans planter la requête de l'utilisateur.
+    const MODEL_CANDIDATES = [
+      "gemini-3.8-flash",
+      "gemini-3.6-flash",
+      "gemini-3.1-flash",
+      "gemini-2.5-flash",
+    ];
 
     async function generateStream(modelName: string) {
       const genAI = new GoogleGenerativeAI(apiKeyString);
@@ -719,34 +723,31 @@ ${modeInstruction}`;
     }
 
     let result;
-    try {
-      result = await generateStream(selectedModel);
-    } catch (streamErr: unknown) {
-      // Repli ordonné : 3.8-flash → 3.6-flash → 3.1-flash.
-      // On capture 503 (saturation), 404 (modèle retiré), et 400 (incompatible).
-      const isRecoverable = (e: unknown) =>
-        e instanceof Error && /503|404|400|not found/i.test(e.message);
-      if (isRecoverable(streamErr)) {
-        const fallback = selectedModel === "gemini-3.8-flash" ? "gemini-3.6-flash" : "gemini-3.1-flash";
-        console.warn(`${selectedModel} unavailable (${streamErr instanceof Error ? streamErr.message : "?"}), falling back to ${fallback}`);
-        try {
-          result = await generateStream(fallback);
-        } catch (fallbackErr: unknown) {
-          if (isRecoverable(fallbackErr) && fallback === "gemini-3.6-flash") {
-            console.warn(`3.6-flash unavailable, final fallback to gemini-3.1-flash`);
-            result = await generateStream("gemini-3.1-flash");
-          } else {
-            throw fallbackErr;
-          }
+    let lastError: unknown;
+
+    for (const modelName of MODEL_CANDIDATES) {
+      try {
+        result = await generateStream(modelName);
+        break; // Modèle opérationnel
+      } catch (streamErr: unknown) {
+        lastError = streamErr;
+        const msg = streamErr instanceof Error ? streamErr.message : String(streamErr);
+        // Si la clé API est invalide, inutile d'essayer les modèles suivants
+        if (/api[ _]?key/i.test(msg)) {
+          throw streamErr;
         }
-      } else {
-        throw streamErr;
+        console.warn(`${modelName} unavailable (${msg}), falling back to next candidate...`);
       }
+    }
+
+    if (!result) {
+      throw lastError || new Error("Tous les modèles Gemini sont temporairement indisponibles.");
     }
 
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
+        let hasError = false;
         try {
           for await (const chunk of result.stream) {
             const chunkText = chunk.text();
@@ -755,10 +756,17 @@ ${modeInstruction}`;
             }
           }
         } catch (err) {
+          hasError = true;
           console.error("Error during streaming:", err);
           controller.error(err);
         } finally {
-          controller.close();
+          if (!hasError) {
+            try {
+              controller.close();
+            } catch {
+              // Ignore si déjà fermé
+            }
+          }
         }
       }
     });
@@ -780,8 +788,13 @@ ${modeInstruction}`;
     let userMessage = message;
     if (userMessage.includes("API key not valid") || userMessage.includes("API_KEY_INVALID")) {
       userMessage = "La clé API Gemini fournie est invalide. Veuillez la vérifier et réessayer.";
-    } else if (userMessage.includes("503")) {
-      userMessage = "Le modèle est temporairement saturé. Réessaye dans quelques instants ou passe sur le modèle Flash (plus stable).";
+    } else if (
+      userMessage.includes("fetch failed") ||
+      userMessage.includes("503") ||
+      userMessage.includes("high demand") ||
+      userMessage.includes("temporarily unavailable")
+    ) {
+      userMessage = "Les serveurs d'IA Google rencontrent une forte affluence ou une instabilité temporaire. Réessayez dans un instant.";
     } else if (userMessage.includes("RESOURCE_EXHAUSTED") || userMessage.includes("429")) {
       if (userMessage.includes("free_tier_requests") || userMessage.includes("free_tier")) {
         userMessage = "Quota Google gratuit épuisé (20 req/jour max). Ajoute ta clé API personnelle dans l'app, ou active la facturation sur ton projet Google Cloud pour passer à 1500 req/jour.";

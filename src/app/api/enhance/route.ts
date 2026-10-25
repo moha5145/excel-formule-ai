@@ -75,17 +75,33 @@ Exemple de sortie : "Je souhaite obtenir une formule permettant de calculer la s
       return model.generateContent(fullPrompt);
     }
 
+    const ENHANCE_CANDIDATES = [
+      "gemini-3.5-flash",
+      "gemini-2.5-flash",
+      "gemini-1.5-flash",
+    ];
+
     let result;
-    try {
-      result = await generateContent("gemini-3.5-flash");
-    } catch (streamErr: unknown) {
-      if (streamErr instanceof Error && streamErr.message.includes("503")) {
-        console.warn("503 on gemini-3.5-flash (enhance), falling back to gemini-2.5-flash");
-        result = await generateContent("gemini-2.5-flash");
-      } else {
-        throw streamErr;
+    let lastError: unknown;
+
+    for (const modelName of ENHANCE_CANDIDATES) {
+      try {
+        result = await generateContent(modelName);
+        break;
+      } catch (err: unknown) {
+        lastError = err;
+        const msg = err instanceof Error ? err.message : String(err);
+        if (/api[ _]?key/i.test(msg)) {
+          throw err;
+        }
+        console.warn(`Enhance model ${modelName} unavailable (${msg}), falling back...`);
       }
     }
+
+    if (!result) {
+      throw lastError || new Error("Modèles d'amélioration indisponibles");
+    }
+
     const response = await result.response;
     const text = response.text();
 
@@ -100,8 +116,13 @@ Exemple de sortie : "Je souhaite obtenir une formule permettant de calculer la s
     let userMessage = message;
     if (userMessage.includes("API key not valid") || userMessage.includes("API_KEY_INVALID")) {
       userMessage = "La clé API Gemini fournie est invalide. Veuillez la vérifier et réessayer.";
-    } else if (userMessage.includes("503")) {
-      userMessage = "Le modèle est temporairement saturé. Réessaye plus tard.";
+    } else if (
+      userMessage.includes("fetch failed") ||
+      userMessage.includes("503") ||
+      userMessage.includes("high demand") ||
+      userMessage.includes("temporarily unavailable")
+    ) {
+      userMessage = "Les serveurs d'IA Google rencontrent une forte affluence ou une instabilité temporaire. Réessayez dans un instant.";
     } else if (userMessage.includes("RESOURCE_EXHAUSTED") || userMessage.includes("429")) {
       if (userMessage.includes("free_tier")) {
         userMessage = "Quota Google gratuit épuisé. Ajoute ta clé API personnelle dans l'app, ou active la facturation sur ton projet Google Cloud.";
