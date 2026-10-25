@@ -200,9 +200,12 @@ export function ComplexTablePreview({
     if (!schema) return { computedRows: [], columnTotals: [], grandTotal: 0 };
 
     const hasParams = (schema.parameters?.length || 0) > 0;
+    // Aligné sur complexExcelBuilder : data_start_row = 1ère ligne de données,
+    // l'en-tête Excel étant écrit juste au-dessus. Sans paramètres, on démarre
+    // à la ligne 5 (en-tête L4) pour éviter un vide de 6 lignes.
     const startRow = !hasParams && (!schema.data_start_row || schema.data_start_row === 10)
-      ? 4
-      : (schema.data_start_row || 10);
+      ? 5
+      : Math.max(schema.data_start_row || 10, 5);
 
     const cellsMap: Record<string, any> = {};
     schema.parameters.forEach((param, pIdx) => {

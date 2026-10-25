@@ -208,7 +208,10 @@ DÉTAILS DU SCHÉMA :
     * "formula_en" = formule INVARIANTE en anglais (IF, VLOOKUP, PMT…), virgule comme séparateur, 
       point comme séparateur décimal. C'est cette version qui sera injectée dans ExcelJS.
     * Si la colonne est une colonne INPUT (saisie utilisateur), "formula" et "formula_en" sont null
-  - "data_start_row": ligne de départ des données (10 par défaut, >= 2)
+  - "data_start_row": ligne de la PREMIÈRE ligne de DONNÉES (10 par défaut, >= 5).
+     Les en-têtes sont écrits automatiquement une ligne au-dessus (data_start_row - 1).
+     Les formules peuvent donc référencer data_start_row comme première ligne de données
+     (ex: "=DATE(YEAR(C10),12,31)-..." avec data_start_row = 10).
   - "sample_rows": nombre de lignes d'exemple à générer dans l'Excel (1 à 100, défaut 3).
      Pour un calcul d'amortissement sur 12 ans, tu peux mettre 12 lignes, ou 24, etc.
 
@@ -401,12 +404,12 @@ EXEMPLE — "Salaire maximum par service" (MAXIFS en mode complexe) :
       { "header": "Salaire", "type": "currency", "formula": null, "formula_en": null,
         "description": "Salaire brut mensuel" },
       { "header": "Salaire max du service", "type": "currency",
-        "formula": "=MAX.SI.ENS($D$11:$D$20, $C$11:$C$20, C{row})",
-        "formula_en": "=MAXIFS($D$11:$D$20, $C$11:$C$20, C{row})",
+        "formula": "=MAX.SI.ENS($D$10:$D$19, $C$10:$C$19, C{row})",
+        "formula_en": "=MAXIFS($D$10:$D$19, $C$10:$C$19, C{row})",
         "description": "Salaire le plus élevé du même service que la ligne courante" },
       { "header": "Salaire max global (filtre C5)", "type": "currency",
-        "formula": "=MAX.SI.ENS($D$11:$D$20, $C$11:$C$20, $C$5)",
-        "formula_en": "=MAXIFS($D$11:$D$20, $C$11:$C$20, $C$5)",
+        "formula": "=MAX.SI.ENS($D$10:$D$19, $C$10:$C$19, $C$5)",
+        "formula_en": "=MAXIFS($D$10:$D$19, $C$10:$C$19, $C$5)",
         "description": "Salaire le plus élevé du service specifie en cellule C5" }
     ],
     "data_start_row": 10,
@@ -416,7 +419,7 @@ EXEMPLE — "Salaire maximum par service" (MAXIFS en mode complexe) :
     - La 1ère formule utilise C{row} (service de la ligne en cours) → renvoie le max du MEME service
     - La 2ème formule utilise $C$5 (saisissable par l'utilisateur) → renvoie le max du service choisi
     - Les 2 solutions coexistent pour répondre aux différentes interprétations de la demande
-    - Les réfs $C$11:$C$20 sont ABSOLUES car l'agrégation porte sur toute la plage, pas sur une seule ligne
+    - Les réfs $C$10:$C$19 sont ABSOLUES car l'agrégation porte sur toute la plage, pas sur une seule ligne
     - "sample_rows": 7 lignes (taille raisonnable pour illustrer sur différents services)
 
 ⚠️⚠️ TABLEAUX CROISÉS (PIVOT) — CALCULS HORIZONTAL + VERTICAL ⚠️⚠️

@@ -349,18 +349,26 @@ export function buildComplexWorkbook(
   }
 
   // Headers du tableau de données
-  // Si le schéma a des paramètres, on respecte leur position (startRow = schema.data_start_row || 10).
-  // Si aucun paramètre n'est défini et qu'aucune formule ne référence de ligne fixe comme $10 ou $11,
-  // on commence dès la ligne 4 pour éviter un vide béant de 6 lignes blanches !
+  // `data_start_row` désigne la PREMIÈRE LIGNE DE DONNÉES (contrat du schéma, cf.
+  // route.ts et ComplexTablePreview). Les en-têtes sont donc écrits une ligne
+  // au-dessus. C'est ce qui rend les formules de paramètres calculés du type
+  // "=DATE(YEAR(C10),12,31)-DATE(YEAR(C10),1,1)+1" valides : C10 pointe bien sur
+  // la première date de données, pas sur l'en-tête texte (qui provoquait #VALEUR!).
+  // Si aucun paramètre n'est défini et qu'aucune formule ne référence de ligne fixe
+  // comme $10 ou $11, on démarre dès la ligne 5 (en-tête L4) pour éviter un vide béant.
   const hasParams = Boolean(schema.parameters && schema.parameters.length > 0);
   const hasFixedRowRanges = schema.columns.some((c) =>
     Boolean((c.formula || c.formula_en || "").match(/\$[A-Z]+\$(10|11|12|13|14|15|16|17|18|19|20)/))
   );
-  const startRow = (!hasParams && !hasFixedRowRanges && schema.data_start_row === 10)
-    ? 4
-    : (schema.data_start_row || 10);
+  const dataStartRow = Math.max(
+    (!hasParams && !hasFixedRowRanges && schema.data_start_row === 10)
+      ? 5
+      : (schema.data_start_row || 10),
+    5
+  );
+  const headerRowIndex = dataStartRow - 1;
 
-  const headerRow = sheetInteractif.getRow(startRow);
+  const headerRow = sheetInteractif.getRow(headerRowIndex);
   headerRow.height = 32;
 
   // Extraire les données d'exemple du Markdown pour adapter l'en-tête de numérotation
@@ -437,7 +445,7 @@ export function buildComplexWorkbook(
   // Écriture des lignes de données
   const sampleRowsCount = customData?.sampleRows ?? schema.sample_rows ?? 3;
   for (let r = 0; r < sampleRowsCount; r++) {
-    const currRowIndex = startRow + 1 + r;
+    const currRowIndex = dataStartRow + r;
     const row = sheetInteractif.getRow(currRowIndex);
     row.height = 22;
 
@@ -593,8 +601,8 @@ export function buildComplexWorkbook(
   // ── Ligne TOTAUX optionnelle (pivot léger) ──
   const hasTotalRow = schema.total_row === true;
   const totalRowLabel = schema.total_row_label || "TOTAUX";
-  const firstDataExpRow = startRow + 1;
-  const lastDataExpRow = startRow + sampleRowsCount;
+  const firstDataExpRow = dataStartRow;
+  const lastDataExpRow = dataStartRow + sampleRowsCount - 1;
 
   if (hasTotalRow) {
     const totalRowIndex = lastDataExpRow + 1;
@@ -668,14 +676,14 @@ export function buildComplexWorkbook(
   sheetInteractif.views = [
     {
       state: "frozen",
-      ySplit: startRow,
+      ySplit: headerRowIndex,
       showGridLines: true,
     },
   ];
 
   // Filtres automatiques sur les en-têtes de colonnes
   sheetInteractif.autoFilter = {
-    from: { row: startRow, column: 2 },
+    from: { row: headerRowIndex, column: 2 },
     to: { row: lastDataExpRow, column: 2 + numCols + rowTotalColCount },
   };
 

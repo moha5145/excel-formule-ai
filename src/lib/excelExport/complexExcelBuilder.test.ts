@@ -46,17 +46,17 @@ describe("complexExcelBuilder", () => {
     const sheet = result.getWorksheet("Tableau Interactif")!;
     // Vérifier les paramètres
     expect(sheet.getCell("C5").value).toBe(500000);
-    // Vérifier les en-têtes
-    expect(sheet.getCell("B10").value).toBe("Ligne");
-    expect(sheet.getCell("C10").value).toBe("Mois");
-    expect(sheet.getCell("D10").value).toBe("Intérêts");
+    // Vérifier les en-têtes (data_start_row = 1ère ligne de données → en-tête L9)
+    expect(sheet.getCell("B9").value).toBe("Ligne");
+    expect(sheet.getCell("C9").value).toBe("Mois");
+    expect(sheet.getCell("D9").value).toBe("Intérêts");
 
     // Vérifier les données
-    expect(sheet.getCell("B11").value).toBe("Ligne 1");
+    expect(sheet.getCell("B10").value).toBe("Ligne 1");
     // Mois (input)
-    expect(sheet.getCell("C11").value).toBe(1);
+    expect(sheet.getCell("C10").value).toBe(1);
     // Intérêts (formule)
-    expect(sheet.getCell("D11").value).toEqual({ formula: "C11*$C$6/12" });
+    expect(sheet.getCell("D10").value).toEqual({ formula: "C10*$C$6/12" });
   });
 
   it("devrait écrire colonne Total ligne + ligne TOTAUX quand row_total_column + total_row sont définis", () => {
@@ -95,27 +95,27 @@ describe("complexExcelBuilder", () => {
     expect(warnings.length).toBe(0);
     const sheet = result.getWorksheet("Tableau Interactif")!;
 
-    // En-têtes : B="Ligne", C="Service", D="Janvier", E="Février", F="Total trim."
-    expect(sheet.getCell("B10").value).toBe("Ligne");
-    expect(sheet.getCell("C10").value).toBe("Service");
-    expect(sheet.getCell("D10").value).toBe("Janvier");
-    expect(sheet.getCell("E10").value).toBe("Février");
-    expect(sheet.getCell("F10").value).toBe("Total trim.");
+    // En-têtes (L9) : B="Ligne", C="Service", D="Janvier", E="Février", F="Total trim."
+    expect(sheet.getCell("B9").value).toBe("Ligne");
+    expect(sheet.getCell("C9").value).toBe("Service");
+    expect(sheet.getCell("D9").value).toBe("Janvier");
+    expect(sheet.getCell("E9").value).toBe("Février");
+    expect(sheet.getCell("F9").value).toBe("Total trim.");
 
-    // Ligne 1 (row 11) : F11 doit contenir SUM(D11:E11)
+    // Ligne 1 (row 10) : F10 doit contenir SUM(D10:E10)
+    expect(sheet.getCell("F10").value).toEqual({ formula: "SUM(D10:E10)" });
+
+    // Ligne 2 (row 11) : F11 = SUM(D11:E11)
     expect(sheet.getCell("F11").value).toEqual({ formula: "SUM(D11:E11)" });
 
-    // Ligne 2 (row 12) : F12 = SUM(D12:E12)
-    expect(sheet.getCell("F12").value).toEqual({ formula: "SUM(D12:E12)" });
-
-    // Ligne TOTAUX (après 3 lignes de données → row 14)
-    expect(sheet.getCell("B14").value).toBe("TOTAUX");
-    // D14 = SUM(D11:D13)
-    expect(sheet.getCell("D14").value).toEqual({ formula: "SUM(D11:D13)" });
-    // E14 = SUM(E11:E13)
-    expect(sheet.getCell("E14").value).toEqual({ formula: "SUM(E11:E13)" });
-    // F14 (intersection) = SUM(F11:F13)
-    expect(sheet.getCell("F14").value).toEqual({ formula: "SUM(F11:F13)" });
+    // Ligne TOTAUX (après 3 lignes de données → row 13)
+    expect(sheet.getCell("B13").value).toBe("TOTAUX");
+    // D13 = SUM(D10:D12)
+    expect(sheet.getCell("D13").value).toEqual({ formula: "SUM(D10:D12)" });
+    // E13 = SUM(E10:E12)
+    expect(sheet.getCell("E13").value).toEqual({ formula: "SUM(E10:E12)" });
+    // F13 (intersection) = SUM(F10:F12)
+    expect(sheet.getCell("F13").value).toEqual({ formula: "SUM(F10:F12)" });
   });
 
   it("devrait convertir une formule de paramètre FR en US-invariant (excel-fr) pour éviter Err :508", () => {
@@ -213,6 +213,9 @@ describe("complexExcelBuilder", () => {
     expect(sheet.getCell("C6").value).toEqual({
       formula: "DATE(YEAR(C10),12,31)-DATE(YEAR(C10),1,1)+1",
     });
+    // C10 est la 1ère ligne de données (data_start_row=10) : c'est bien une date,
+    // pas l'en-tête texte. C'est ce qui garantit YEAR(C10) valide dans Excel.
+    expect(sheet.getCell("C10").value).toBeInstanceOf(Date);
   });
 
   it("doit écrire les dates de colonne input sans décalage de fuseau horaire", () => {
@@ -252,9 +255,9 @@ describe("complexExcelBuilder", () => {
 
     // Vérifier que chaque date est un Date JavaScript avec le BON jour/mois/année
     // (peu importe le fuseau horaire du serveur qui exécute le test).
-    const d1 = sheet.getCell("C11").value as Date;
-    const d2 = sheet.getCell("C12").value as Date;
-    const d3 = sheet.getCell("C13").value as Date;
+    const d1 = sheet.getCell("C10").value as Date;
+    const d2 = sheet.getCell("C11").value as Date;
+    const d3 = sheet.getCell("C12").value as Date;
 
     expect(d1).toBeInstanceOf(Date);
     expect(d2).toBeInstanceOf(Date);
@@ -463,7 +466,7 @@ describe("complexExcelBuilder", () => {
     const wb = new ExcelJS.Workbook();
     const { workbook } = buildComplexWorkbook(wb, schema, "", "prompt", "excel-fr");
     const ws = workbook.getWorksheet("Tableau Interactif")!;
-    const cell = ws.getCell("C11");
+    const cell = ws.getCell("C10");
     expect(cell.dataValidation?.type).toBe("list");
     expect(cell.dataValidation?.formulae).toEqual(["RefProduits!$A$2:$A$5"]);
   });
@@ -498,9 +501,9 @@ describe("complexExcelBuilder", () => {
     // Paramètre mis à jour
     expect(sheet.getCell("C5").value).toBe(0.25);
     // Données des 3 lignes
-    expect(sheet.getCell("C11").value).toBe(500);
-    expect(sheet.getCell("C12").value).toBe(1200);
-    expect(sheet.getCell("C13").value).toBe(3000);
+    expect(sheet.getCell("C10").value).toBe(500);
+    expect(sheet.getCell("C11").value).toBe(1200);
+    expect(sheet.getCell("C12").value).toBe(3000);
   });
 
   it("devrait démarrer à la ligne 4 sans lignes vides quand il n'y a pas de paramètres", () => {
@@ -550,7 +553,7 @@ describe("complexExcelBuilder", () => {
 
     const sheet = workbook.getWorksheet("Tableau Interactif")!;
     // Theme header color
-    const headerCell = sheet.getCell("C10");
+    const headerCell = sheet.getCell("C9");
     const fill = headerCell.fill as ExcelJS.FillPattern;
     expect(fill?.fgColor?.argb).toBe("FF064E3B");
 
