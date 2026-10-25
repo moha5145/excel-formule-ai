@@ -195,6 +195,134 @@ export function ComplexTablePreview({
     });
   }, [onDownloadExcel, schema, sampleRows, paramValues, inputValues, selectedTheme]);
 
+  // Calcul en direct des lignes et des totaux horizontaux et verticaux
+  const { computedRows, columnTotals, grandTotal } = useMemo(() => {
+    if (!schema) return { computedRows: [], columnTotals: [], grandTotal: 0 };
+
+    const hasParams = (schema.parameters?.length || 0) > 0;
+    const startRow = !hasParams && (!schema.data_start_row || schema.data_start_row === 10)
+      ? 4
+      : (schema.data_start_row || 10);
+
+    const cellsMap: Record<string, any> = {};
+    schema.parameters.forEach((param, pIdx) => {
+      const cleanRef = param.ref.replace(/\$/g, "").toUpperCase();
+      const rawVal = paramValues[pIdx] ?? param.value;
+      cellsMap[cleanRef] = rawVal;
+    });
+
+    const rows: Array<{
+      rIdx: number;
+      rowNumber: number;
+      cells: Array<{
+        cIdx: number;
+        isCalculated: boolean;
+        val: any;
+        isExcelOnly: boolean;
+        isError: boolean;
+        formula?: string | null;
+      }>;
+      rowTotalVal?: number;
+    }> = [];
+
+    const numCols = schema.columns.length;
+    const colSums: number[] = new Array(numCols).fill(0);
+    const colHasNumeric: boolean[] = new Array(numCols).fill(false);
+    let totalOfRowTotals = 0;
+
+    for (let rIdx = 0; rIdx < sampleRows; rIdx++) {
+      const rowNumber = startRow + rIdx;
+
+      // 1. Enregistrer d'abord les entrées utilisateur pour cette ligne
+      schema.columns.forEach((col, cI) => {
+        const colLetter = getColumnLetterFromIndex(cI);
+        const key = `${rIdx}-${cI}`;
+        const val = inputValues[key] ?? "";
+        if (!col.formula && !col.formula_en) {
+          cellsMap[`${colLetter}${rowNumber}`] = val;
+        }
+      });
+
+      // 2. Évaluer chaque colonne séquentiellement
+      const rowCells: Array<{
+        cIdx: number;
+        isCalculated: boolean;
+        val: any;
+        isExcelOnly: boolean;
+        isError: boolean;
+        formula?: string | null;
+      }> = [];
+
+      let currentRowNumericSum = 0;
+      let hasRowNumeric = false;
+
+      for (let cIdx = 0; cIdx < numCols; cIdx++) {
+        const col = schema.columns[cIdx];
+        const isCalculated = Boolean(col.formula || col.formula_en);
+        const colLetter = getColumnLetterFromIndex(cIdx);
+        let cellVal: any;
+
+        if (isCalculated) {
+          const formulaToEval = col.formula_en || col.formula || "";
+          cellVal = evaluateFormula(formulaToEval, {
+            row: rowNumber,
+            cells: cellsMap,
+          });
+          cellsMap[`${colLetter}${rowNumber}`] = cellVal;
+        } else {
+          const key = `${rIdx}-${cIdx}`;
+          cellVal = inputValues[key] ?? "";
+        }
+
+        const isExcelOnly = cellVal === "#CALC_EXCEL";
+        const isError = typeof cellVal === "string" && cellVal.startsWith("#") && !isExcelOnly;
+
+        rowCells.push({
+          cIdx,
+          isCalculated,
+          val: cellVal,
+          isExcelOnly,
+          isError,
+          formula: col.formula || col.formula_en,
+        });
+
+        // Somme verticale
+        const isNumericType = ["currency", "percentage", "integer", "number"].includes(col.type);
+        if (isNumericType) {
+          const num = Number(cellVal);
+          if (!isNaN(num)) {
+            colSums[cIdx] += num;
+            colHasNumeric[cIdx] = true;
+            currentRowNumericSum += num;
+            hasRowNumeric = true;
+          }
+        }
+      }
+
+      // Somme horizontale pour la colonne "row_total_column"
+      let rowTotalVal: number | undefined = undefined;
+      if (schema.row_total_column) {
+        rowTotalVal = hasRowNumeric ? currentRowNumericSum : 0;
+        totalOfRowTotals += rowTotalVal;
+      }
+
+      rows.push({
+        rIdx,
+        rowNumber,
+        cells: rowCells,
+        rowTotalVal,
+      });
+    }
+
+    const finalColumnTotals = colSums.map((sum, i) => (colHasNumeric[i] ? sum : null));
+
+    return {
+      computedRows: rows,
+      columnTotals: finalColumnTotals,
+      grandTotal: totalOfRowTotals,
+    };
+  }, [schema, sampleRows, paramValues, inputValues]);
+
   // ── CAS A : Modification in-place sur fichier importé ──
   if (modifSchema) {
     const targetSheetName = modifSchema.target_sheet;
@@ -404,103 +532,105 @@ export function ComplexTablePreview({
                   {col.header}
                 </th>
               ))}
+              {schema.row_total_column && (
+                <th className="p-2.5 border-r border-slate-700 font-bold whitespace-nowrap bg-slate-800 text-emerald-400">
+                  {schema.row_total_column.header}
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
-            {Array.from({ length: sampleRows }).map((_, rIdx) => {
-              const rowNumber = (schema.data_start_row || 10) + rIdx;
+            {computedRows.map((row) => (
+              <tr key={row.rIdx} className="border-b border-border/40 hover:bg-muted/10">
+                <td className="p-2 text-center text-muted-foreground bg-muted/20 border-r border-border/40 font-mono">
+                  {row.rIdx + 1}
+                </td>
+                {row.cells.map((cell) => {
+                  const col = schema.columns[cell.cIdx];
+                  const key = `${row.rIdx}-${cell.cIdx}`;
 
-              // Construction du dictionnaire de cellules pour cette ligne
-              const cellsMap: Record<string, any> = {};
-
-              // 1. Paramètres globaux ($C$5, C5...)
-              schema.parameters.forEach((param, pIdx) => {
-                const cleanRef = param.ref.replace(/\$/g, "").toUpperCase();
-                const rawVal = paramValues[pIdx] ?? param.value;
-                cellsMap[cleanRef] = rawVal;
-              });
-
-              // 2. Colonnes inputs de la ligne
-              schema.columns.forEach((_, cI) => {
-                const colLetter = getColumnLetterFromIndex(cI);
-                const key = `${rIdx}-${cI}`;
-                const val = inputValues[key] ?? "";
-                cellsMap[`${colLetter}${rowNumber}`] = val;
-              });
-
-              return (
-                <tr key={rIdx} className="border-b border-border/40 hover:bg-muted/10">
-                  <td className="p-2 text-center text-muted-foreground bg-muted/20 border-r border-border/40 font-mono">
-                    {rIdx + 1}
-                  </td>
-                  {schema.columns.map((col, cIdx) => {
-                    const isCalculated = Boolean(col.formula || col.formula_en);
-                    const key = `${rIdx}-${cIdx}`;
-
-                    if (isCalculated) {
-                      const formulaToEval = col.formula_en || col.formula || "";
-                      const evalResult = evaluateFormula(formulaToEval, {
-                        row: rowNumber,
-                        cells: cellsMap,
-                      });
-
-                      // Stocker aussi le résultat calculé dans le map pour les colonnes calculées suivantes sur la même ligne
-                      const colLetter = getColumnLetterFromIndex(cIdx);
-                      cellsMap[`${colLetter}${rowNumber}`] = evalResult;
-
-                      const isExcelOnly = evalResult === "#CALC_EXCEL";
-                      const isError = typeof evalResult === "string" && evalResult.startsWith("#") && !isExcelOnly;
-
-                      return (
-                        <td
-                          key={cIdx}
-                          className="p-2 border-r border-border/40 font-mono bg-emerald-50/50 dark:bg-emerald-950/20"
-                        >
-                          <div className="flex flex-col">
-                            {isExcelOnly ? (
-                              <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 font-medium w-fit">
-                                Calculé sous Excel
-                              </span>
-                            ) : (
-                              <span
-                                className={`font-semibold ${
-                                  isError
-                                    ? "text-rose-600 dark:text-rose-400"
-                                    : "text-emerald-700 dark:text-emerald-300"
-                                }`}
-                              >
-                                {formatDisplayValue(evalResult, col.type)}
-                              </span>
-                            )}
-                            <span className="text-[9px] text-muted-foreground/70 font-mono truncate" title={col.formula || ""}>
-                              {col.formula || "Calculé"}
-                            </span>
-                          </div>
-                        </td>
-                      );
-                    }
-
+                  if (cell.isCalculated) {
                     return (
                       <td
-                        key={cIdx}
-                        className="p-2 border-r border-border/40 font-mono bg-amber-50/40 dark:bg-amber-950/10"
+                        key={cell.cIdx}
+                        className="p-2 border-r border-border/40 font-mono bg-emerald-50/50 dark:bg-emerald-950/20"
                       >
-                        <input
-                          type="text"
-                          value={inputValues[key] ?? ""}
-                          onChange={(e) =>
-                            setInputValues((prev) => ({ ...prev, [key]: e.target.value }))
-                          }
-                          placeholder="Saisir..."
-                          className="w-full bg-transparent border-0 focus:ring-0 focus:outline-none p-0 text-foreground font-mono"
-                        />
+                        <div className="flex flex-col">
+                          {cell.isExcelOnly ? (
+                            <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 font-medium w-fit">
+                              Calculé sous Excel
+                            </span>
+                          ) : (
+                            <span
+                              className={`font-semibold ${
+                                cell.isError
+                                  ? "text-rose-600 dark:text-rose-400"
+                                  : "text-emerald-700 dark:text-emerald-300"
+                              }`}
+                            >
+                              {formatDisplayValue(cell.val, col.type)}
+                            </span>
+                          )}
+                          <span
+                            className="text-[9px] text-muted-foreground/70 font-mono truncate"
+                            title={cell.formula || ""}
+                          >
+                            {cell.formula || "Calculé"}
+                          </span>
+                        </div>
                       </td>
                     );
-                  })}
-                </tr>
-              );
-            })}
+                  }
+
+                  return (
+                    <td
+                      key={cell.cIdx}
+                      className="p-2 border-r border-border/40 font-mono bg-amber-50/40 dark:bg-amber-950/10"
+                    >
+                      <input
+                        type="text"
+                        value={inputValues[key] ?? ""}
+                        onChange={(e) =>
+                          setInputValues((prev) => ({ ...prev, [key]: e.target.value }))
+                        }
+                        placeholder="Saisir..."
+                        className="w-full bg-transparent border-0 focus:ring-0 focus:outline-none p-0 text-foreground font-mono"
+                      />
+                    </td>
+                  );
+                })}
+                {schema.row_total_column && (
+                  <td className="p-2 border-r border-border/40 font-mono font-bold text-right bg-slate-100 dark:bg-slate-900/60 text-foreground">
+                    {formatDisplayValue(row.rowTotalVal, schema.row_total_column.type || "currency")}
+                  </td>
+                )}
+              </tr>
+            ))}
           </tbody>
+          {schema.total_row && (
+            <tfoot className="bg-muted/80 border-t-2 border-border font-bold">
+              <tr>
+                <td className="p-2 text-center text-muted-foreground font-mono">
+                  {schema.total_row_label || "TOTAUX"}
+                </td>
+                {schema.columns.map((col, cIdx) => (
+                  <td
+                    key={cIdx}
+                    className="p-2 border-r border-border/40 font-mono text-right"
+                  >
+                    {columnTotals[cIdx] !== null
+                      ? formatDisplayValue(columnTotals[cIdx], col.type)
+                      : "—"}
+                  </td>
+                ))}
+                {schema.row_total_column && (
+                  <td className="p-2 border-r border-border/40 font-mono text-right bg-emerald-100/50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300">
+                    {formatDisplayValue(grandTotal, schema.row_total_column.type || "currency")}
+                  </td>
+                )}
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
 
