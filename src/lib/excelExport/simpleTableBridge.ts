@@ -56,8 +56,8 @@ export function convertSimpleTableToSchema(response: string, promptTitle?: strin
     const isResult = idx === headers.length - 1;
     let type: TableColumn["type"] = "number";
     const lower = header.toLowerCase();
-    if (/%|taux|tva|pourcent/i.test(lower)) type = "percentage";
-    else if (/€|euro|prix|montant|total|salaire|prime/i.test(lower)) type = "currency";
+    if (/€|euro|prix|montant|total|salaire|prime|tva/i.test(lower) && !/taux|%|pourcent/i.test(lower)) type = "currency";
+    else if (/%|taux|pourcent/i.test(lower)) type = "percentage";
     else if (/date/i.test(lower)) type = "date";
     else if (/nom|libellé|texte|produit|client|article/i.test(lower)) type = "text";
     else if (/quantité|nb|nombre|durée|années|mois|jours/i.test(lower)) type = "integer";
