@@ -28,8 +28,28 @@ interface ComplexTablePreviewProps {
   onDownloadModifiedFile?: () => void;
 }
 
+function getColumnLetterFromIndex(cIdx: number): string {
+  let n = 3 + cIdx; // 3 = C (car A=1, B=2 pour la colonne "Ligne")
+  let letter = "";
+  while (n > 0) {
+    const rem = (n - 1) % 26;
+    letter = String.fromCharCode(65 + rem) + letter;
+    n = Math.floor((n - 1) / 26);
+  }
+  return letter;
+}
+
+function normalizeHeader(h: string): string {
+  return h
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "");
+}
+
 function formatDisplayValue(val: unknown, type?: string): string {
   if (val === undefined || val === null || val === "") return "—";
+  if (val === "#CALC_EXCEL") return "Calculé sous Excel";
   if (typeof val === "string" && val.startsWith("#")) return val;
   const num = Number(val);
   if (isNaN(num)) return String(val);
@@ -98,18 +118,28 @@ export function ComplexTablePreview({
     const mdTable = mdTables[0];
     if (!mdTable) return inputs;
 
+    const hasRowColInMd =
+      mdTable.headers.length > 0 &&
+      /^(ligne|n|no|num|#|id)$/i.test(normalizeHeader(mdTable.headers[0]));
+
     const numCols = schema.columns.length;
     for (let c = 0; c < numCols; c++) {
       const col = schema.columns[c];
       if (col.formula || col.formula_en) continue;
 
-      const colHeader = col.header.toLowerCase().trim();
-      let mdIdx = mdTable.headers.findIndex((h) => h.toLowerCase().trim() === colHeader);
+      const colNorm = normalizeHeader(col.header);
+      let mdIdx = mdTable.headers.findIndex((h) => normalizeHeader(h) === colNorm);
       if (mdIdx === -1) {
-        mdIdx = c + 1; // Fallback col 0 = "Ligne"
+        mdIdx = mdTable.headers.findIndex((h) => {
+          const hNorm = normalizeHeader(h);
+          return hNorm.length > 2 && colNorm.length > 2 && (hNorm.includes(colNorm) || colNorm.includes(hNorm));
+        });
+      }
+      if (mdIdx === -1) {
+        mdIdx = hasRowColInMd ? c + 1 : c;
       }
 
-      if (mdIdx !== -1) {
+      if (mdIdx >= 0 && mdIdx < mdTable.headers.length) {
         for (let r = 0; r < Math.min(mdTable.rows.length, 30); r++) {
           const val = mdTable.rows[r]?.[mdIdx]?.trim();
           if (val !== undefined && val !== "") {
@@ -376,7 +406,7 @@ export function ComplexTablePreview({
 
               // 2. Colonnes inputs de la ligne
               schema.columns.forEach((_, cI) => {
-                const colLetter = String.fromCharCode(67 + cI); // C, D, E...
+                const colLetter = getColumnLetterFromIndex(cI);
                 const key = `${rIdx}-${cI}`;
                 const val = inputValues[key] ?? "";
                 cellsMap[`${colLetter}${rowNumber}`] = val;
@@ -399,8 +429,11 @@ export function ComplexTablePreview({
                       });
 
                       // Stocker aussi le résultat calculé dans le map pour les colonnes calculées suivantes sur la même ligne
-                      const colLetter = String.fromCharCode(67 + cIdx);
+                      const colLetter = getColumnLetterFromIndex(cIdx);
                       cellsMap[`${colLetter}${rowNumber}`] = evalResult;
+
+                      const isExcelOnly = evalResult === "#CALC_EXCEL";
+                      const isError = typeof evalResult === "string" && evalResult.startsWith("#") && !isExcelOnly;
 
                       return (
                         <td
@@ -408,9 +441,21 @@ export function ComplexTablePreview({
                           className="p-2 border-r border-border/40 font-mono bg-emerald-50/50 dark:bg-emerald-950/20"
                         >
                           <div className="flex flex-col">
-                            <span className="font-semibold text-emerald-700 dark:text-emerald-300">
-                              {formatDisplayValue(evalResult, col.type)}
-                            </span>
+                            {isExcelOnly ? (
+                              <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 font-medium w-fit">
+                                Calculé sous Excel
+                              </span>
+                            ) : (
+                              <span
+                                className={`font-semibold ${
+                                  isError
+                                    ? "text-rose-600 dark:text-rose-400"
+                                    : "text-emerald-700 dark:text-emerald-300"
+                                }`}
+                              >
+                                {formatDisplayValue(evalResult, col.type)}
+                              </span>
+                            )}
                             <span className="text-[9px] text-muted-foreground/70 font-mono truncate" title={col.formula || ""}>
                               {col.formula || "Calculé"}
                             </span>
