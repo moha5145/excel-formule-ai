@@ -7,6 +7,7 @@ import {
   extractFileModificationSchema,
   validateFileModificationSchema,
 } from "./schemaParser";
+import { resolveTotals } from "./totalPolicy";
 
 describe("schemaParser", () => {
   describe("isComplexResponse", () => {
@@ -68,14 +69,131 @@ describe("schemaParser", () => {
       const validated = validateSchema(raw);
       expect(validated.type).toBe("complex_table");
       expect(validated.title).toBe("Simulation");
-      expect(validated.columns).toEqual(raw.columns);
+      expect(
+        validated.columns.map(({ header, type, formula, formula_en }) => ({
+          header,
+          type,
+          formula,
+          formula_en,
+        }))
+      ).toEqual(raw.columns);
       expect(validated.parameters).toEqual(raw.parameters);
       expect(validated.data_start_row).toBe(10);
       expect(validated.sample_rows).toBe(5);
-      // Champs pivot léger : présents avec valeurs par défaut si non fournis
-      expect(validated.total_row).toBe(false);
-      expect(validated.total_row_label).toBe("TOTAUX");
+      // Champs de totaux : "auto" par défaut, libellé déduit à l'exécution
+      expect(validated.total_row).toBe("auto");
+      expect(validated.total_row_label).toBeUndefined();
       expect(validated.row_total_column).toBeUndefined();
+    });
+
+    it("devrait normaliser les types hors enum au lieu de rejeter le schéma", () => {
+      const raw = {
+        type: "complex_table",
+        title: "Types tolérants",
+        columns: [
+          { header: "Montant HT", type: "devise", formula: "=1+1", formula_en: "=1+1" },
+          { header: "Nombre de factures", type: "count", formula: "=1+1", formula_en: "=1+1" },
+          { header: "Statut", type: "flag", formula: "=1+1", formula_en: "=1+1" },
+          { header: "Date d'échéance", type: "when", formula: "=1+1", formula_en: "=1+1" },
+        ],
+      };
+      const validated = validateSchema(raw);
+      expect(validated.columns.map((c) => c.type)).toEqual([
+        "currency",
+        "integer",
+        "text",
+        "date",
+      ]);
+    });
+
+    it("devrait typer Date en date et réparer une formule qui référence la colonne B", () => {
+      const raw = {
+        type: "complex_table",
+        title: "Extraire l'année fiscale d'une date",
+        parameters: [
+          { name: "Date de début", ref: "C5", value: "01/01/2024", type: "text" },
+          { name: "Mois de début", ref: "C6", value: 7, type: "integer" },
+        ],
+        columns: [
+          { header: "Date", type: "text", formula: null, formula_en: null },
+          {
+            header: "Année fiscale",
+            type: "integer",
+            formula: "=SI(MOIS(B2)>=7;ANNEE(B2)+1;ANNEE(B2))",
+            formula_en: "=IF(MONTH(B2)>=7,YEAR(B2)+1,YEAR(B2))",
+          },
+        ],
+        data_start_row: 5,
+        sample_rows: 4,
+      };
+      const validated = validateSchema(raw);
+      expect(validated.columns[0].type).toBe("date");
+      expect(validated.parameters[0].type).toBe("date");
+      expect(validated.columns[1].formula).toBe(
+        "=SI(MOIS(C{row})>=7;ANNEE(C{row})+1;ANNEE(C{row}))"
+      );
+      expect(validated.columns[1].formula_en).toBe(
+        "=IF(MONTH(C{row})>=7,YEAR(C{row})+1,YEAR(C{row}))"
+      );
+    });
+
+    it("devrait réparer B{row} sans toucher aux références d'une autre feuille", () => {
+      const raw = {
+        type: "complex_table",
+        title: "Année et somme",
+        parameters: [{ name: "Mois de début", ref: "C5", value: 7, type: "integer" }],
+        columns: [
+          { header: "Date", type: "date", formula: null, formula_en: null },
+          {
+            header: "Année fiscale",
+            type: "integer",
+            formula:
+              "=SI(MOIS(B{row})>=7;ANNEE(B{row})+1;ANNEE(B{row}))+SOMME(Ref!B10:B15)",
+            formula_en:
+              "=IF(MONTH(B{row})>=7,YEAR(B{row})+1,YEAR(B{row}))+SUM(Ref!B10:B15)",
+          },
+        ],
+        data_start_row: 5,
+        sample_rows: 4,
+      };
+      const validated = validateSchema(raw);
+      expect(validated.columns[1].formula).toContain("MOIS(C{row})");
+      expect(validated.columns[1].formula).toContain("ANNEE(C{row})");
+      expect(validated.columns[1].formula).toContain("Ref!B10:B15");
+      expect(validated.columns[1].formula_en).toContain("MONTH(C{row})");
+      expect(validated.columns[1].formula_en).toContain("Ref!B10:B15");
+    });
+
+    it("devrait normaliser total, total_row et total_row_label fournis par le modèle", () => {
+      const raw = {
+        type: "complex_table",
+        title: "Totaux tolérants",
+        columns: [
+          {
+            header: "Montant",
+            type: "currency",
+            formula: null,
+            formula_en: null,
+            total: "SUM",
+          },
+          { header: "Libellé", type: "text", formula: "=1+1", formula_en: "=1+1" },
+          {
+            header: "Nb Factures",
+            type: "integer",
+            formula: "=NB.SI.ENS(...)",
+            formula_en: "=COUNTIFS(...)",
+            total: "unique",
+          },
+        ],
+        parameters: [{ name: "Montant", ref: "C3", value: 100, type: "currency" }],
+        total_row: "true",
+        total_row_label: "  Total général  ",
+      };
+      const validated = validateSchema(raw);
+      expect(validated.columns[0].total).toBe("sum");
+      expect(validated.columns[2].total).toBe("once");
+      expect(validated.total_row).toBe(true);
+      expect(validated.total_row_label).toBe("Total général");
     });
 
     it("devrait lever une erreur si formula ou formula_en n'ont pas la même présence de null", () => {
@@ -180,6 +298,62 @@ describe("schemaParser", () => {
       const parsed = validateSchema(schema);
       expect(parsed.columns[0].validation?.type).toBe("list");
       expect(parsed.columns[0].validation?.ref_table).toBe("RefProduits");
+    });
+
+    it("devrait accepter total: sum/none et total_row: auto", () => {
+      const raw = {
+        type: "complex_table",
+        title: "Commande avec liste déroulante dynamique",
+        parameters: [
+          { name: "Taux TVA", ref: "C5", value: 0.2, type: "percentage" },
+        ],
+        columns: [
+          { header: "Quantité", type: "integer", formula: null, formula_en: null, total: "sum" },
+          { header: "Prix Unitaire", type: "currency", formula: null, formula_en: null, total: "none" },
+          { header: "Total HT", type: "currency", formula: "=D{row}*E{row}", formula_en: "=D{row}*E{row}", total: "sum" },
+        ],
+        data_start_row: 10,
+        sample_rows: 4,
+        total_row: "auto",
+      };
+
+      const validated = validateSchema(raw);
+      expect(validated.total_row).toBe("auto");
+      expect(validated.columns[0].total).toBe("sum");
+      expect(validated.columns[1].total).toBe("none");
+      expect(validated.total_row_label).toBeUndefined();
+    });
+
+    it("devrait mettre total à auto par défaut sur une colonne", () => {
+      const raw = {
+        type: "complex_table",
+        title: "Test",
+        parameters: [{ name: "X", ref: "C5", value: 1, type: "integer" }],
+        columns: [
+          { header: "Mois", type: "integer", formula: null, formula_en: null },
+          { header: "Calcul", type: "number", formula: "=1+1", formula_en: "=1+1" },
+        ],
+      };
+      const validated = validateSchema(raw);
+      expect(validated.columns[0].total).toBe("auto");
+    });
+
+    it("devrait accepter total_row: true sans colonne sommable (ligne omise)", () => {
+      const raw = {
+        type: "complex_table",
+        title: "Toutes colonnes text",
+        parameters: [{ name: "X", ref: "C5", value: 1, type: "integer" }],
+        columns: [
+          { header: "Service", type: "text", formula: null, formula_en: null },
+          { header: "Note", type: "text", formula: null, formula_en: null },
+        ],
+        data_start_row: 10,
+        sample_rows: 3,
+        total_row: true,
+      };
+      const validated = validateSchema(raw);
+      expect(validated.total_row).toBe(true);
+      expect(resolveTotals(validated).showTotalRow).toBe(false);
     });
 
     it("devrait lever une erreur si row_total_column défini mais aucune colonne sommable", () => {

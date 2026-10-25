@@ -1,4 +1,8 @@
 import { z } from "zod";
+import { normalizeHeader } from "./totalPolicy";
+import type { ColumnTotal } from "./totalPolicy";
+
+export type { ColumnTotal } from "./totalPolicy";
 
 export type ColumnType =
   | "currency"
@@ -34,6 +38,7 @@ export interface TableColumn {
   formula_en: string | null;     // version anglaise invariante
   description?: string;
   validation?: ColumnValidation;
+  total?: ColumnTotal;           // "sum" | "once" | "none" | "auto" (défaut "auto")
 }
 
 export interface ReferenceTable {
@@ -62,8 +67,8 @@ export interface TableSchema {
   sample_rows: number;
   reference_tables?: ReferenceTable[];    // tables de référence (lookup) écrites dans un onglet séparé
   row_total_column?: RowTotalColumn;       // Optionnel: colonne "Total de ligne" à droite du tableau
-  total_row?: boolean;                     // Optionnel (défaut false): ajoute une ligne TOTAUX en bas
-  total_row_label?: string;               // Optionnel (défaut "TOTAUX"): libellé de la ligne de total
+  total_row?: boolean | "auto";            // Optionnel (défaut "auto"): ajoute une ligne de totaux en bas
+  total_row_label?: string;               // Optionnel: libellé dynamique (déduit du contexte si absent)
 }
 
 export class SchemaValidationError extends Error {
@@ -78,16 +83,143 @@ export class SchemaValidationError extends Error {
 
 const CELL_REF_REGEX = /^[A-Z]{1,3}[0-9]{1,3}$/; // "A1", "AB12", "C3"
 
-const ColumnTypeSchema = z.enum([
+const VALID_COLUMN_TYPES = [
   "currency",
   "percentage",
   "integer",
   "number",
   "date",
   "text",
-]);
+] as const;
 
-const TableParameterSchema = z.object({
+const COLUMN_TYPE_ALIASES: Record<string, ColumnType> = {
+  devise: "currency",
+  monetaire: "currency",
+  money: "currency",
+  monetary: "currency",
+  euro: "currency",
+  eur: "currency",
+  "$": "currency",
+  percent: "percentage",
+  pourcentage: "percentage",
+  taux: "percentage",
+  rate: "percentage",
+  "%": "percentage",
+  int: "integer",
+  entier: "integer",
+  count: "integer",
+  nombre: "integer",
+  whole: "integer",
+  numeric: "number",
+  numerique: "number",
+  decimal: "number",
+  float: "number",
+  double: "number",
+  string: "text",
+  texte: "text",
+  boolean: "text",
+  bool: "text",
+  booleen: "text",
+  datetime: "date",
+  "date-time": "date",
+  timestamp: "date",
+};
+
+function inferColumnTypeFromHeader(header: string): ColumnType {
+  const raw = header.toLowerCase();
+  const normalized = normalizeHeader(header);
+  if (/taux|pourcentage|percent|\brate\b|ratio|coefficient/.test(normalized)) {
+    return "percentage";
+  }
+  if (
+    /%/.test(raw) &&
+    !/montant|total|prix|euro|cout|salaire|prime|budget|vente|valeur|frais|charge|tva/.test(normalized)
+  ) {
+    return "percentage";
+  }
+  if (/\bdate\b|datetime|echeance/.test(normalized)) return "date";
+  if (/montant|total|prix|euro|cout|salaire|prime|budget|vente|valeur|frais|charge|tva|devise|\bca\b/.test(normalized)) {
+    return "currency";
+  }
+  if (/quantite|nombre|\bnb\b|annee|mois|jour|duree|age|\bcount\b|\bqty\b|heure/.test(normalized)) {
+    return "integer";
+  }
+  if (/statut|nom|libelle|produit|categorie|client|texte|description|service|region|pays|type|commentaire/.test(normalized)) {
+    return "text";
+  }
+  return "number";
+}
+
+// Tolérant : le modèle produit parfois des types hors enum ("string", "count",
+// "monétaire", "bool"…). On normalise au lieu de rejeter tout le schéma.
+export function normalizeColumnType(raw: unknown, header?: unknown): ColumnType {
+  // Un en-tête/nom "Date..." est TOUJOURS une date, même si le modèle a mis
+  // "text"/"number" : sinon YEAR()/MONTH() renvoient #VALEUR! sur une chaîne.
+  if (typeof header === "string" && /\bdate\b/.test(normalizeHeader(header))) {
+    return "date";
+  }
+  if (typeof raw === "string") {
+    const value = raw
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+    if ((VALID_COLUMN_TYPES as readonly string[]).includes(value)) {
+      return value as ColumnType;
+    }
+    const alias = COLUMN_TYPE_ALIASES[value];
+    if (alias) return alias;
+  }
+  return inferColumnTypeFromHeader(typeof header === "string" ? header : "");
+}
+
+const ColumnTypeSchema = z.preprocess(
+  (raw) => normalizeColumnType(raw),
+  z.enum(VALID_COLUMN_TYPES)
+);
+
+function normalizeTotal(raw: unknown): ColumnTotal {
+  if (raw === true) return "sum";
+  if (raw === false) return "none";
+  if (typeof raw === "string") {
+    const value = raw.trim().toLowerCase();
+    if (["sum", "somme", "total", "yes", "oui", "true"].includes(value)) return "sum";
+    if (["none", "no", "non", "false", "aucun", "off"].includes(value)) return "none";
+    if (["once", "unique", "first", "premiere", "valeur", "reference"].includes(value)) return "once";
+    if (["auto", "automatique", ""].includes(value)) return "auto";
+  }
+  return "auto";
+}
+
+function normalizeTotalRow(raw: unknown): boolean | "auto" {
+  if (raw === true || raw === false) return raw;
+  if (typeof raw === "string") {
+    const value = raw.trim().toLowerCase();
+    if (["true", "yes", "oui", "1"].includes(value)) return true;
+    if (["false", "no", "non", "0", "none"].includes(value)) return false;
+  }
+  return "auto";
+}
+
+const TotalSchema = z.preprocess(
+  (raw) => normalizeTotal(raw),
+  z.enum(["sum", "once", "none", "auto"])
+);
+
+const TotalRowSchema = z.preprocess(
+  (raw) => normalizeTotalRow(raw),
+  z.union([z.boolean(), z.literal("auto")])
+);
+
+const TotalRowLabelSchema = z.preprocess(
+  (raw) =>
+    typeof raw === "string" && raw.trim()
+      ? raw.trim().slice(0, 40)
+      : undefined,
+  z.string().min(1).max(40).optional()
+);
+
+const TableParameterObjectSchema = z.object({
   name: z.string().min(1).max(80),
   ref: z.string().regex(CELL_REF_REGEX, "ref doit être une référence de cellule type 'C3'"),
   value: z.union([z.number(), z.string().min(1)]).optional(),
@@ -114,6 +246,14 @@ const TableParameterSchema = z.object({
   }
 });
 
+const TableParameterSchema = z.preprocess((raw) => {
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    const param = raw as Record<string, unknown>;
+    return { ...param, type: normalizeColumnType(param.type, param.name) };
+  }
+  return raw;
+}, TableParameterObjectSchema);
+
 const ColumnValidationSchema = z.object({
   type: z.literal("list"),
   ref_table: z.string().optional(),
@@ -121,13 +261,14 @@ const ColumnValidationSchema = z.object({
   formula_range: z.string().optional(),
 });
 
-const TableColumnSchema = z.object({
+const TableColumnObjectSchema = z.object({
   header: z.string().min(1).max(60),
   type: ColumnTypeSchema,
   formula: z.union([z.string().min(1).max(500), z.null()]),
   formula_en: z.union([z.string().min(1).max(500), z.null()]),
   description: z.string().max(200).optional(),
   validation: ColumnValidationSchema.optional(),
+  total: TotalSchema,
 }).superRefine((col, ctx) => {
   // Cohérence : si formula existe, formula_en doit exister aussi (et inversement)
   if ((col.formula === null) !== (col.formula_en === null)) {
@@ -146,6 +287,17 @@ const TableColumnSchema = z.object({
     });
   }
 });
+
+const TableColumnSchema = z.preprocess((raw) => {
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    const column = raw as Record<string, unknown>;
+    return {
+      ...column,
+      type: normalizeColumnType(column.type, column.header),
+    };
+  }
+  return raw;
+}, TableColumnObjectSchema);
 
 const ReferenceTableSchema = z.object({
   name: z.string().min(1).max(60),
@@ -195,8 +347,8 @@ const TableSchemaZod = z.object({
   sample_rows: z.number().int().min(1).max(100).default(3),
   reference_tables: z.array(ReferenceTableSchema).max(10).optional(),
   row_total_column: RowTotalColumnSchema.optional(),
-  total_row: z.boolean().optional().default(false),
-  total_row_label: z.string().min(1).max(40).optional().default("TOTAUX"),
+  total_row: TotalRowSchema,
+  total_row_label: TotalRowLabelSchema,
 }).superRefine((schema, ctx) => {
   // Règle F4: si au moins 1 colonne est input (formula === null),
   // parameters doit être non-vide
@@ -220,17 +372,8 @@ const TableSchemaZod = z.object({
       });
     }
   }
-  // Idem pour total_row : il faut au moins 1 colonne sommable
-  if (schema.total_row) {
-    const summable = schema.columns.filter((c) => NUMERIC_COLUMN_TYPES.includes(c.type));
-    if (summable.length === 0) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "total_row est défini mais aucune colonne n'est sommable",
-        path: ["total_row"],
-      });
-    }
-  }
+  // total_row: true sans colonne sommable n'est PAS une erreur : la ligne de
+  // totaux est simplement omise (le modèle peut se tromper sans bloquer l'export).
 });
 
 const SCHEMA_REGEX = /<!--\s*TABLE_SCHEMA:\s*(\{[\s\S]*?\})\s*-->/;
@@ -245,12 +388,62 @@ export function extractTableSchema(markdown: string): unknown | null {
   }
 }
 
+const DATE_FUNCTION_REGEX =
+  /\b(YEAR|MONTH|DAY|DATE|EOMONTH|DATEDIF|DATEVALUE|ANNEE|MOIS|JOUR)\s*\(/i;
+
+// La colonne B est réservée au libellé "Ligne". Une formule de type
+// YEAR(B2)/MONTH(B{row}) est donc décalée d'une colonne : on la répare vers la
+// colonne de date réelle, en conservant le placeholder {row}.
+function replaceReservedLigneColumn(formula: string, dateColumnLetter: string): string {
+  const protectedParts: string[] = [];
+  const stash = (part: string): string => {
+    protectedParts.push(part);
+    return `\u0000${protectedParts.length - 1}\u0000`;
+  };
+
+  let result = formula
+    .replace(/"[^"]*"/g, stash)
+    .replace(
+      /((?:'[^']+'|[A-Za-z_][A-Za-z0-9_.]*)!\$?[A-Z]{1,3}\$?\d+(?::\$?[A-Z]{1,3}\$?\d+)?)/g,
+      stash
+    );
+
+  result = result.replace(
+    /(\$?)B(\$?)(\{row(?:-1)?\}|\d+)/g,
+    (_match, _dollar1: string, _dollar2: string, ref: string) =>
+      `${dateColumnLetter}${ref.startsWith("{") ? ref : "{row}"}`
+  );
+
+  return result.replace(/\u0000(\d+)\u0000/g, (_match, index: string) =>
+    protectedParts[Number(index)] ?? ""
+  );
+}
+
+function repairDateFormulas(schema: TableSchema): void {
+  const dateIndex = schema.columns.findIndex(
+    (column) => column.type === "date" || /date/.test(normalizeHeader(column.header))
+  );
+  if (dateIndex < 0) return;
+  const dateColumnLetter = String.fromCharCode(67 + dateIndex);
+
+  for (const column of schema.columns) {
+    for (const field of ["formula", "formula_en"] as const) {
+      const formula = column[field];
+      if (!formula || !DATE_FUNCTION_REGEX.test(formula)) continue;
+      const repaired = replaceReservedLigneColumn(formula, dateColumnLetter);
+      if (repaired !== formula) column[field] = repaired;
+    }
+  }
+}
+
 export function validateSchema(raw: unknown): TableSchema {
   const parsed = TableSchemaZod.safeParse(raw);
   if (!parsed.success) {
     throw new SchemaValidationError(parsed.error.issues, raw);
   }
-  return parsed.data as TableSchema;
+  const schema = parsed.data as TableSchema;
+  repairDateFormulas(schema);
+  return schema;
 }
 
 export function isComplexResponse(markdown: string): boolean {

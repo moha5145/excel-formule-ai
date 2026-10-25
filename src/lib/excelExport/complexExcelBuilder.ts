@@ -2,6 +2,7 @@ import ExcelJS from "exceljs";
 import { type TableSchema, type TableColumn, type ReferenceTable } from "./schemaParser";
 import { type ExportFormat, resolveFormulaTemplate, convertToUsInvariant } from "./postProcessFormula";
 import { extractTables } from "../excelExport";
+import { resolveTotals } from "./totalPolicy";
 import { getExcelTheme } from "./excelTheme";
 
 interface BuildResult {
@@ -598,9 +599,12 @@ export function buildComplexWorkbook(
     }
   }
 
-  // ── Ligne TOTAUX optionnelle (pivot léger) ──
-  const hasTotalRow = schema.total_row === true;
-  const totalRowLabel = schema.total_row_label || "TOTAUX";
+  // ── Ligne de totaux (verticale) ──
+  // La politique partagée décide quelles colonnes sont sommables et quel libellé
+  // afficher (dynamique selon le contexte du tableau).
+  const totals = resolveTotals({ ...schema, sample_rows: sampleRowsCount });
+  const hasTotalRow = totals.showTotalRow;
+  const totalRowLabel = totals.label;
   const firstDataExpRow = dataStartRow;
   const lastDataExpRow = dataStartRow + sampleRowsCount - 1;
 
@@ -624,11 +628,19 @@ export function buildComplexWorkbook(
     for (let c = 0; c < numCols; c++) {
       const col = schema.columns[c];
       const cell = tRow.getCell(3 + c);
-      const isNumeric = ["currency", "percentage", "integer", "number"].includes(col.type);
-      if (isNumeric) {
+      if (totals.summable[c]) {
         const colLetter = String.fromCharCode(67 + c);
         const sumRange = `${colLetter}${firstDataExpRow}:${colLetter}${lastDataExpRow}`;
         cell.value = { formula: `SUM(${sumRange})` };
+      } else if (totals.displayOnce[c]) {
+        // Colonne calculée constante (COUNTIFS/SUMIFS sur critères) : on affiche
+        // la valeur une seule fois au lieu de la sommer ou de laisser vide.
+        const colLetter = String.fromCharCode(67 + c);
+        cell.value = { formula: `${colLetter}${firstDataExpRow}` };
+      } else if (totals.displayLast[c]) {
+        // Cumul / running total : la dernière ligne porte le cumul final.
+        const colLetter = String.fromCharCode(67 + c);
+        cell.value = { formula: `${colLetter}${lastDataExpRow}` };
       } else {
         cell.value = ""; // colonne non sommable
       }

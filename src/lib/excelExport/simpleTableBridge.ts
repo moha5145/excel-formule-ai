@@ -56,8 +56,12 @@ export function convertSimpleTableToSchema(response: string, promptTitle?: strin
     const isResult = idx === headers.length - 1;
     let type: TableColumn["type"] = "number";
     const lower = header.toLowerCase();
-    if (/€|euro|prix|montant|total|salaire|prime|tva/i.test(lower) && !/taux|%|pourcent/i.test(lower)) type = "currency";
-    else if (/%|taux|pourcent/i.test(lower)) type = "percentage";
+    const isPercentageHeader = /taux|pourcentage|pourcent|\brate\b|ratio|coefficient/i.test(lower);
+    const hasStrongMonetaryHeader = /€|euro|prix|montant|total|salaire|prime|co[uû]t|charge|frais|valeur|budget|vente/i.test(lower);
+    const hasTvaHeader = /\btva\b/i.test(lower);
+    if (isPercentageHeader) type = "percentage";
+    else if (hasStrongMonetaryHeader || (hasTvaHeader && !/%/.test(lower))) type = "currency";
+    else if (/%/.test(lower)) type = "percentage";
     else if (/date/i.test(lower)) type = "date";
     else if (/nom|libellé|texte|produit|client|article/i.test(lower)) type = "text";
     else if (/quantité|nb|nombre|durée|années|mois|jours/i.test(lower)) type = "integer";
@@ -69,6 +73,8 @@ export function convertSimpleTableToSchema(response: string, promptTitle?: strin
         formula: rowPlaceholderFormulaFr,
         formula_en: rowPlaceholderFormulaEn,
         description: "Résultat calculé",
+        // Une colonne de résultat numérique est un total de ligne naturel.
+        total: type === "currency" || type === "number" || type === "integer" ? "sum" : "none",
       };
     }
 
@@ -88,5 +94,6 @@ export function convertSimpleTableToSchema(response: string, promptTitle?: strin
     columns,
     data_start_row: parameters.length > 0 ? (parseInt(rowToReplace, 10) || 10) : 4,
     sample_rows: Math.max(1, table.rows.length),
+    total_row: "auto",
   };
 }

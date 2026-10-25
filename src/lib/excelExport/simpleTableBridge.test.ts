@@ -27,6 +27,10 @@ Voici votre formule de calcul de TVA :
     expect(schema?.columns[1].header).toBe("TVA (20%)");
     expect(schema?.columns[1].formula).toContain("C{row}");
     expect(schema?.sample_rows).toBe(2);
+    expect(schema?.total_row).toBe("auto");
+    // "TVA (20%)" sans mot monétaire explicite reste un taux (le montant serait "Montant TVA").
+    expect(schema?.columns[1].type).toBe("percentage");
+    expect(schema?.columns[1].total).toBe("none");
   });
 
   it("devrait extraire les paramètres globaux <!-- PARAM C5 = 0.20 --> s'ils existent", () => {
@@ -83,5 +87,34 @@ Voici votre formule de calcul de TVA :
 
     // "Montant TVA" → currency (contient "montant", PAS percentage malgré "tva")
     expect(schema?.columns[2].type).toBe("currency");
+    // La colonne de résultat monétaire est sommable.
+    expect(schema?.columns[2].total).toBe("sum");
+  });
+  it("devrait typer 'Montant TVA (20%)' en currency et non en percentage", () => {
+    const response = `
+Calcul de la TVA :
+\`\`\`excel
+=C10 * $C$5
+\`\`\`
+<!-- PARAM C5 = 0.20 -->
+
+| Ligne | Montant HT (€) | Taux TVA | Montant TVA (20%) (€) |
+| :--- | :--- | :--- | :--- |
+| Ligne 1 | 100,00 | 20,00 % | 20,00 |
+| Ligne 2 | 250,50 | 20,00 % | 50,10 |
+| Ligne 3 | 5 000,00 | 20,00 % | 1 000,00 |
+
+<!-- FORMULA_EN: =C10 * $C$5 -->
+`;
+    const schema = convertSimpleTableToSchema(response, "Calculer la TVA à 20% d'un montant HT");
+    expect(schema).not.toBeNull();
+
+    // "Montant HT (€)" → currency
+    expect(schema?.columns[0].type).toBe("currency");
+    // "Taux TVA" → percentage (contient "taux")
+    expect(schema?.columns[1].type).toBe("percentage");
+    // "Montant TVA (20%) (€)" → currency malgré le "%" dans le libellé
+    expect(schema?.columns[2].type).toBe("currency");
+    expect(schema?.columns[2].total).toBe("sum");
   });
 });

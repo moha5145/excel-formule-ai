@@ -7,6 +7,7 @@ import {
   type FileModification,
   validateFileModificationSchema,
 } from "@/lib/excelExport/schemaParser";
+import { resolveTotals } from "@/lib/excelExport/totalPolicy";
 import { type FileContext } from "@/components/FormulaAssistant";
 import { FileSpreadsheet, Plus, Download, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -196,8 +197,10 @@ export function ComplexTablePreview({
   }, [onDownloadExcel, schema, sampleRows, paramValues, inputValues, selectedTheme]);
 
   // Calcul en direct des lignes et des totaux horizontaux et verticaux
-  const { computedRows, columnTotals, grandTotal } = useMemo(() => {
-    if (!schema) return { computedRows: [], columnTotals: [], grandTotal: 0 };
+  const { computedRows, columnTotals, grandTotal, totals } = useMemo(() => {
+    if (!schema) return { computedRows: [], columnTotals: [], grandTotal: 0, totals: null };
+
+    const resolvedTotals = resolveTotals({ ...schema, sample_rows: sampleRows });
 
     const hasParams = (schema.parameters?.length || 0) > 0;
     // Aligné sur complexExcelBuilder : data_start_row = 1ère ligne de données,
@@ -317,12 +320,24 @@ export function ComplexTablePreview({
       });
     }
 
-    const finalColumnTotals = colSums.map((sum, i) => (colHasNumeric[i] ? sum : null));
+    const finalColumnTotals = colSums.map((sum, i) => {
+      if (colHasNumeric[i] && resolvedTotals.summable[i]) return sum;
+      if (resolvedTotals.displayOnce[i] && rows.length > 0) {
+        const firstValue = Number(rows[0].cells[i]?.val);
+        return Number.isNaN(firstValue) ? null : firstValue;
+      }
+      if (resolvedTotals.displayLast[i] && rows.length > 0) {
+        const lastValue = Number(rows[rows.length - 1].cells[i]?.val);
+        return Number.isNaN(lastValue) ? null : lastValue;
+      }
+      return null;
+    });
 
     return {
       computedRows: rows,
       columnTotals: finalColumnTotals,
       grandTotal: totalOfRowTotals,
+      totals: resolvedTotals,
     };
   }, [schema, sampleRows, paramValues, inputValues]);
 
@@ -610,11 +625,11 @@ export function ComplexTablePreview({
               </tr>
             ))}
           </tbody>
-          {schema.total_row && (
+          {totals?.showTotalRow && (
             <tfoot className="bg-muted/80 border-t-2 border-border font-bold">
               <tr>
                 <td className="p-2 text-center text-muted-foreground font-mono">
-                  {schema.total_row_label || "TOTAUX"}
+                  {totals.label}
                 </td>
                 {schema.columns.map((col, cIdx) => (
                   <td

@@ -564,5 +564,194 @@ describe("complexExcelBuilder", () => {
     const colB = sheet.getColumn(2);
     expect(colB.width).toBeGreaterThanOrEqual("Mode de calcul assurance très long".length);
   });
-});
+  it("devrait sommer uniquement les colonnes pertinentes (commande) et utiliser un libellé dynamique", () => {
+    const workbook = new ExcelJS.Workbook();
+    const schema: TableSchema = {
+      type: "complex_table",
+      title: "Commande avec liste déroulante dynamique",
+      parameters: [
+        { name: "Taux TVA applicable", ref: "C5", value: 0.2, type: "percentage", unit: "%" },
+      ],
+      columns: [
+        { header: "Catégorie", type: "text", formula: null, formula_en: null, total: "none" },
+        { header: "Produit", type: "text", formula: null, formula_en: null, total: "none" },
+        { header: "Quantité", type: "integer", formula: null, formula_en: null, total: "sum" },
+        { header: "Prix Unitaire", type: "currency", formula: null, formula_en: null, total: "none" },
+        { header: "Total HT", type: "currency", formula: "=E{row}*F{row}", formula_en: "=E{row}*F{row}", total: "sum" },
+        { header: "Total TTC", type: "currency", formula: "=G{row}*(1+$C$5)", formula_en: "=G{row}*(1+$C$5)", total: "sum" },
+      ],
+      data_start_row: 10,
+      sample_rows: 4,
+      total_row: true,
+    };
 
+    const response = `
+    | Ligne | Catégorie | Produit | Quantité | Prix Unitaire | Total HT | Total TTC |
+    |---|---|---|---|---|---|---|
+    | Ligne 1 | Électronique | Ordinateur | 2 | 1200 | 2400 | 2880 |
+    | Ligne 2 | Mobilier | Chaise | 4 | 150 | 600 | 720 |
+    | Ligne 3 | Électronique | Téléphone | 1 | 800 | 800 | 960 |
+    | Ligne 4 | Mobilier | Armoire | 1 | 500 | 500 | 600 |
+    `;
+
+    const { workbook: result, warnings } = buildComplexWorkbook(
+      workbook, schema, response, "Commande avec liste déroulante", "excel-fr"
+    );
+
+    expect(warnings.length).toBe(0);
+    const sheet = result.getWorksheet("Tableau Interactif")!;
+
+    // Libellé dynamique déduit du titre "Commande" (pas "TOTAUX").
+    expect(sheet.getCell("B14").value).toBe("TOTAL");
+
+    // Quantité, Total HT et Total TTC sont sommés verticalement.
+    expect(sheet.getCell("E14").value).toEqual({ formula: "SUM(E10:E13)" });
+    expect(sheet.getCell("G14").value).toEqual({ formula: "SUM(G10:G13)" });
+    expect(sheet.getCell("H14").value).toEqual({ formula: "SUM(H10:H13)" });
+
+    // Le prix unitaire n'est pas sommé.
+    expect(sheet.getCell("F14").value).toBe("");
+  });
+
+  it("devrait afficher une agrégation constante une seule fois dans la ligne de totaux", () => {
+    const workbook = new ExcelJS.Workbook();
+    const schema: TableSchema = {
+      type: "complex_table",
+      title: "Comptage des factures impayées selon critères",
+      parameters: [
+        { name: "Statut recherché", ref: "C5", value: "Impayée", type: "text" },
+        { name: "Montant minimum", ref: "C6", value: 1000, type: "currency" },
+      ],
+      columns: [
+        { header: "Statut Facture", type: "text", formula: null, formula_en: null },
+        { header: "Montant Facture", type: "currency", formula: null, formula_en: null, total: "sum" },
+        {
+          header: "Nb Factures",
+          type: "integer",
+          formula: "=NB.SI.ENS(D10:D19;\">1000\";C10:C19;$C$5)",
+          formula_en: "=COUNTIFS(D10:D19,\">1000\",C10:C19,$C$5)",
+          total: "none",
+        },
+      ],
+      data_start_row: 10,
+      sample_rows: 3,
+      total_row: true,
+    };
+
+    const response = `
+    | Ligne | Statut Facture | Montant Facture | Nb Factures |
+    |---|---|---|---|
+    | Ligne 1 | Impayée | 1250 | 3 |
+    | Ligne 2 | Payée | 800 | 3 |
+    | Ligne 3 | Impayée | 950 | 3 |
+    `;
+
+    const { workbook: result, warnings } = buildComplexWorkbook(
+      workbook, schema, response, "Comptage factures", "excel-fr"
+    );
+
+    expect(warnings.length).toBe(0);
+    const sheet = result.getWorksheet("Tableau Interactif")!;
+
+    expect(sheet.getCell("B13").value).toBe("TOTAL");
+    // Le montant est sommé.
+    expect(sheet.getCell("D13").value).toEqual({ formula: "SUM(D10:D12)" });
+    // L'agrégation constante n'est pas sommée : référence à la première ligne.
+    expect(sheet.getCell("E13").value).toEqual({ formula: "E10" });
+  });
+
+  it("devrait afficher la dernière valeur d'une colonne cumulée (jamais la somme)", () => {
+    const workbook = new ExcelJS.Workbook();
+    const schema: TableSchema = {
+      type: "complex_table",
+      title: "Somme des ventes par région et date",
+      parameters: [
+        { name: "Région à filtrer", ref: "C5", value: "Nord", type: "text" },
+        { name: "Date de début", ref: "C6", value: "01/01/2024", type: "date" },
+      ],
+      columns: [
+        { header: "Date de vente", type: "date", formula: null, formula_en: null },
+        { header: "Région", type: "text", formula: null, formula_en: null },
+        {
+          header: "Montant de vente (€)",
+          type: "currency",
+          formula: null,
+          formula_en: null,
+          total: "sum",
+        },
+        {
+          header: "Ventes cumulées (filtre)",
+          type: "currency",
+          formula: "=SOMME.SI.ENS($E$10:$E$15;$D$10:$D$15;$C$5)",
+          formula_en: "=SUMIFS($E$10:$E$15,$D$10:$D$15,$C$5)",
+          total: "sum",
+        },
+      ],
+      data_start_row: 10,
+      sample_rows: 3,
+      total_row: true,
+    };
+
+    const response = `
+    | Ligne | Date de vente | Région | Montant de vente (€) | Ventes cumulées (filtre) |
+    |---|---|---|---|---|
+    | Ligne 1 | 15/12/2023 | Nord | 1200 | 10500 |
+    | Ligne 2 | 10/01/2024 | Nord | 3500 | 10500 |
+    | Ligne 3 | 20/02/2024 | Sud | 2000 | 10500 |
+    `;
+
+    const { workbook: result, warnings } = buildComplexWorkbook(
+      workbook, schema, response, "Ventes par région", "excel-fr"
+    );
+
+    expect(warnings.length).toBe(0);
+    const sheet = result.getWorksheet("Tableau Interactif")!;
+
+    expect(sheet.getCell("B13").value).toBe("TOTAL VENTES");
+    expect(sheet.getCell("E13").value).toEqual({ formula: "SUM(E10:E12)" });
+    // Cumul : dernière ligne (F12), pas SUM(F10:F12) = 31 500 €.
+    expect(sheet.getCell("F13").value).toEqual({ formula: "F12" });
+  });
+
+  it("ne devrait pas écrire de ligne de totaux pour une colonne d'années", () => {
+    const workbook = new ExcelJS.Workbook();
+    const schema: TableSchema = {
+      type: "complex_table",
+      title: "Extraire l'année fiscale d'une date",
+      parameters: [{ name: "Mois de début", ref: "C5", value: 7, type: "integer" }],
+      columns: [
+        { header: "Date", type: "date", formula: null, formula_en: null, total: "none" },
+        {
+          header: "Année Fiscale",
+          type: "integer",
+          formula: "=SI(MOIS(B{row})>=C5;ANNEE(B{row})+1;ANNEE(B{row}))",
+          formula_en: "=IF(MONTH(B{row})>=C5,YEAR(B{row})+1,YEAR(B{row}))",
+          total: "sum",
+        },
+      ],
+      data_start_row: 10,
+      sample_rows: 5,
+      total_row: true,
+    };
+
+    const response = `
+    | Ligne | Date | Année Fiscale |
+    |---|---|---|
+    | Ligne 1 | 15/03/2024 | 2023 |
+    | Ligne 2 | 30/06/2024 | 2023 |
+    | Ligne 3 | 01/07/2024 | 2024 |
+    | Ligne 4 | 20/11/2024 | 2024 |
+    | Ligne 5 | 05/02/2025 | 2024 |
+    `;
+
+    const { workbook: result, warnings } = buildComplexWorkbook(
+      workbook, schema, response, "Année fiscale", "excel-fr"
+    );
+
+    expect(warnings.length).toBe(0);
+    const sheet = result.getWorksheet("Tableau Interactif")!;
+
+    // Données en lignes 10-14 : aucune ligne de totaux, l'instruction arrive en B15.
+    expect(String(sheet.getCell("B15").value)).toContain("Conseil");
+  });
+});

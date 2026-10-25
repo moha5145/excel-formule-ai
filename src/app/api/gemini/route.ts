@@ -265,6 +265,9 @@ RÈGLES CRITIQUES pour les formules du schéma :
     Ta 3ème colonne correspond à la lettre E. Etc.
     Exemple pour 10 colonnes : columns[0]=C, columns[1]=D, columns[2]=E, columns[3]=F, 
     columns[4]=G, columns[5]=H, columns[6]=I, columns[7]=J, columns[8]=K, columns[9]=L.
+    ⚠️ NE RÉFÉRENCE JAMAIS B (ni B2, ni B{row}, ni A) dans une formule de donnée :
+    B = "Ligne". Si l'utilisateur parle de "cellule B2", ignore cette lettre et utilise la
+    colonne réelle de la donnée (ex. C{row} pour la 1ère colonne, D{row} pour la 2ème).
   - Pour référencer une colonne SUR LA MÊME LIGNE (calculs intermédiaires), écris simplement G{row} (où G est la lettre de la colonne calculée).
   - Pour le PREMIER cas sur une ligne (ex: solde initial), écris par exemple :
         =IF(A{row}=1, $C$5, G{row})
@@ -422,30 +425,91 @@ EXEMPLE — "Salaire maximum par service" (MAXIFS en mode complexe) :
     - Les réfs $C$10:$C$19 sont ABSOLUES car l'agrégation porte sur toute la plage, pas sur une seule ligne
     - "sample_rows": 7 lignes (taille raisonnable pour illustrer sur différents services)
 
-⚠️⚠️ TABLEAUX CROISÉS (PIVOT) — CALCULS HORIZONTAL + VERTICAL ⚠️⚠️
-Quand la demande demande une VUE EN LIGNES × COLONNES avec totaux (ex:
-"Budget marketing par service et par mois", "Ventes par région et par trimestre",
-"Effectifs par département par année"), tu peux produire un TABLEAU CROISÉ :
+⚠️⚠️ TOTAUX HORIZONTAUX ET VERTICAUX — NE LES OUBLIE JAMAIS ⚠️⚠️
+Un tableau de plusieurs LIGNES avec des montants DOIT presque toujours comporter une LIGNE DE TOTAUX
+en bas. C'est le cas de TOUTE liste de lignes répétées : facture, devis, commande, budget, ventes,
+stock, échéancier, trésorerie, effectifs, dépenses, suivi d'activité...
 
-  - LIGNES = dimension catégorie (Service, Région, Produit...) — colonne INPUT
-  - COLONNES = dimension période (Jan, Fev, Mar...) — une colonne par valeur
-  - CELLULES = montant agrégé via SUMIFS/MAXIFS/etc qui pointe vers les en-têtes
-    de colonne (la période) ET la valeur de ligne courante (la catégorie)
+  RÈGLES DE DÉCISION (applique-les mécaniquement) :
+    - Tableau avec >= 2 lignes d'exemple ET au moins une colonne de montant (Total HT, Total TTC,
+      Montant, Budget, Salaire, Prime, Ventes, Stock, Quantité...) → "total_row": true OBLIGATOIRE.
+    - Tableau d'amortissement / VNC / intérêts où sommer n'a pas de sens métier → mets
+      "total": "none" sur les colonnes concernées.
+    - Pour désactiver complètement la ligne : "total": "none" sur TOUTES les colonnes numériques.
+      ("total_row": false ne suffit PAS si une colonne de montant reste sommable.)
+    - En cas de doute → "total_row": "auto" (le moteur décide), mais préfère true quand un total
+      de lignes a du sens pour l'utilisateur.
 
-  Pour activer ce mode, AJOUTE AU SCHÉMA les 3 champs optionnels suivants :
-
-    - "row_total_column": { "header": "Total X", "type": "currency" }
-      → ajoute une colonne "Total" à droite qui somme chaque ligne horizontalement.
-      Excel SUM ignore le texte/dates, donc la somme se fait automatiquement sur
-      les colonnes numériques. Tu n'as PAS besoin d'écrire la formule.
-
+  Pour activer la ligne de totaux, AJOUTE AU SCHÉMA :
     - "total_row": true
-      → ajoute une ligne "TOTAUX" en bas du tableau qui somme chaque colonne
-        verticalement. Tu n'as PAS besoin d'écrire la formule non plus.
+    - "total_row_label": "..."  (libellé COURT et DYNAMIQUE, 2 mots max, adapté au tableau :
+      "TOTAL" pour une commande/facture/devis, "TOTAL GÉNÉRAL" pour un budget,
+      "CUMUL" pour un échéancier, "TOTAL VENTES", "TOTAL STOCK", "TOTAL EFFECTIFS",
+      "TOTAL CHARGES"... Ne mets PAS systématiquement "TOTAUX".)
 
-    - "total_row_label": "TOTAUX"  (optionnel, défaut "TOTAUX")
-      → libellé personnalisé de la ligne de total (ex: "Total général",
-        "Sous-total", "Cumul").
+  Pour CHAQUE colonne numérique, précise si elle doit être additionnée :
+    - "total": "sum"  → colonnes de montants/quantités : Quantité, Total HT, Total TTC, Montant,
+      Budget, Salaire, Prime, Stock, Ventes, Heures, Jours...
+    - "total": "once" → colonnes CALCULÉES CONSTANTES ou CUMULÉES :
+      • agrégation sans {row} (NB.SI.ENS/COUNTIFS, SOMME.SI.ENS/SUMIFS, MAX.SI.ENS/MAXIFS…)
+        → même valeur sur toutes les lignes, affichée UNE SEULE FOIS, jamais additionnée
+        (ex. "Nb Factures (selon C5 & C6)", "Ventes cumulées (filtre)").
+      • colonne de cumul / running total (en-tête "cumul", "progressif", ou plage $D$10:D{row})
+        → le moteur affiche la DERNIÈRE valeur (le cumul final), jamais la somme des cumuls.
+    - "total": "none" → Prix Unitaire, Taux, Remise, Pourcentage, Moyenne, Année, Date,
+      Mois, Jour, Âge, Durée, N°, Réf, ID...
+    - "total": "auto" → laisse le moteur décider (par défaut)
+
+  ⚠️ Un prix unitaire, un taux, une ANNÉE, une DATE, un mois, un jour, un âge, une durée,
+  un numéro/ID ne s'additionnent JAMAIS. Seuls les montants de ligne et les quantités se somment.
+  Extraire une année fiscale (ex. YEAR/MONTH) est une donnée de catégorie, pas un montant :
+  mets "total": "none" et ne demande PAS de ligne de totaux s'il n'y a aucune colonne sommable.
+
+  ⚠️ RÈGLE ABSOLUE DES TOTAUX :
+    - Une formule calculée SANS {row} est CONSTANTE : toutes les lignes affichent la même
+      valeur. La somme serait fausse (ex. SOMME.SI.ENS sur des paramètres → 6 × 10 500 €).
+      Elle est donc TOUJOURS "total": "once", jamais "sum".
+    - Une colonne de CUMUL ne se somme jamais : "total": "once" (dernière valeur affichée).
+    - Seule une colonne calculée LIGNE PAR LIGNE (formule contenant {row}) peut être "sum".
+
+  ⚠️ TYPE D'UNE COLONNE : le "type" décrit la NATURE DE LA VALEUR, pas un taux cité dans l'en-tête.
+    - "Montant TVA (20%)" → "currency" : c'est un MONTANT, le (20%) n'est qu'un rappel du taux.
+    - "Taux TVA" ou "TVA (%)" → "percentage" : c'est un TAUX.
+    - Ne mets JAMAIS "percentage" sur une colonne de montant sous prétexte que son en-tête contient "%".
+
+  EXEMPLE — "Commande avec liste déroulante dynamique" (cas typique facture/commande) :
+  <!-- TABLE_SCHEMA: {
+    "type": "complex_table",
+    "title": "Commande avec liste déroulante dynamique",
+    "parameters": [
+      { "name": "Taux TVA applicable", "ref": "C5", "value": 0.20, "type": "percentage", "unit": "%" }
+    ],
+    "columns": [
+      { "header": "Catégorie", "type": "text", "formula": null, "formula_en": null, "total": "none" },
+      { "header": "Produit", "type": "text", "formula": null, "formula_en": null, "total": "none" },
+      { "header": "Quantité", "type": "integer", "formula": null, "formula_en": null, "total": "sum" },
+      { "header": "Prix Unitaire", "type": "currency", "formula": null, "formula_en": null, "total": "none" },
+      { "header": "Total HT", "type": "currency", "formula": "=E{row}*F{row}", "formula_en": "=E{row}*F{row}", "total": "sum" },
+      { "header": "Total TTC", "type": "currency", "formula": "=G{row}*(1+$C$5)", "formula_en": "=G{row}*(1+$C$5)", "total": "sum" }
+    ],
+    "data_start_row": 10,
+    "sample_rows": 4,
+    "total_row": true,
+    "total_row_label": "TOTAL"
+  } -->
+  RATIONNEL :
+    - Quantité, Total HT et Total TTC reçoivent "total": "sum" → ligne TOTAL en bas.
+    - Prix Unitaire reçoit "total": "none" → il ne doit pas être additionné.
+    - "total_row_label": "TOTAL" est déduit du contexte "Commande" (pas "TOTAUX").
+    - Le builder Excel ET l'aperçu interactif ajoutent la ligne de totaux automatiquement :
+      tu n'écris AUCUNE formule de total toi-même.
+
+  TABLEAUX CROISÉS (PIVOT) — EN PLUS DES TOTAUX :
+  Pour une vue lignes × colonnes (ex: "Budget par service et par mois"), conserve en plus :
+    - "row_total_column": { "header": "Total trim.", "type": "currency" }
+      → ajoute une colonne "Total" à droite qui somme chaque ligne horizontalement.
+    - "total_row": true → ligne de totaux verticaux.
+    - "total_row_label": "TOTAL GÉNÉRAL"
 
   EXEMPLE — "Budget marketing par service et par mois (Jan, Fev, Mar)" :
   <!-- TABLE_SCHEMA: {
@@ -455,17 +519,16 @@ Quand la demande demande une VUE EN LIGNES × COLONNES avec totaux (ex:
       { "name": "Budget source global", "ref": "C5", "value": 50000, "type": "currency" }
     ],
     "columns": [
-      { "header": "Service", "type": "text", "formula": null, "formula_en": null,
-        "description": "Service à budgétiser" },
+      { "header": "Service", "type": "text", "formula": null, "formula_en": null, "total": "none" },
       { "header": "Janvier", "type": "currency",
         "formula": "=SUMIFS(budgets!$D$2:$D$20, budgets!$B$2:$B$20, C{row}, budgets!$A$2:$A$20, DATE(YEAR($C$6),1,1))",
-        "formula_en": "=SUMIFS(budgets!$D$2:$D$20, budgets!$B$2:$B$20, C{row}, budgets!$A$2:$A$20, DATE(YEAR($C$6),1,1))" },
+        "formula_en": "=SUMIFS(budgets!$D$2:$D$20, budgets!$B$2:$B$20, C{row}, budgets!$A$2:$A$20, DATE(YEAR($C$6),1,1))", "total": "sum" },
       { "header": "Février", "type": "currency",
         "formula": "=SUMIFS(budgets!$D$2:$D$20, budgets!$B$2:$B$20, C{row}, budgets!$A$2:$A$20, DATE(YEAR($C$6),2,1))",
-        "formula_en": "=SUMIFS(budgets!$D$2:$D$20, budgets!$B$2:$B$20, C{row}, budgets!$A$2:$A$20, DATE(YEAR($C$6),2,1))" },
+        "formula_en": "=SUMIFS(budgets!$D$2:$D$20, budgets!$B$2:$B$20, C{row}, budgets!$A$2:$A$20, DATE(YEAR($C$6),2,1))", "total": "sum" },
       { "header": "Mars", "type": "currency",
         "formula": "=SUMIFS(budgets!$D$2:$D$20, budgets!$B$2:$B$20, C{row}, budgets!$A$2:$A$20, DATE(YEAR($C$6),3,1))",
-        "formula_en": "=SUMIFS(budgets!$D$2:$D$20, budgets!$B$2:$B$20, C{row}, budgets!$A$2:$A$20, DATE(YEAR($C$6),3,1))" }
+        "formula_en": "=SUMIFS(budgets!$D$2:$D$20, budgets!$B$2:$B$20, C{row}, budgets!$A$2:$A$20, DATE(YEAR($C$6),3,1))", "total": "sum" }
     ],
     "data_start_row": 10,
     "sample_rows": 4,
@@ -488,22 +551,25 @@ Quand la demande demande une VUE EN LIGNES × COLONNES avec totaux (ex:
     ],
     "row_total_column": { "header": "Total trim.", "type": "currency" },
     "total_row": true,
-    "total_row_label": "TOTAUX"
+    "total_row_label": "TOTAL GÉNÉRAL"
   } -->
   RATIONNEL :
     - La colonne "Service" est INPUT (saisie par l'utilisateur) → C{row} critère variable
     - Chaque colonne Mois utilise SUMIFS qui filtre sur C{row} (service courant) ET sur la date
     - "row_total_column" ajoute automatiquement "Total trim." = SUM(Jan, Fev, Mar) sur la ligne
-    - "total_row": true ajoute automatiquement une ligne TOTAUX en bas = SUM verticale par mois
+    - "total_row": true ajoute automatiquement une ligne de totaux en bas = SUM verticale par mois
     - Le builder Excel gère les totaux SANS que tu n'écrives leurs formules.
     - IMPORTANT : tu DOIS quand même fournir les formules des colonnes de données (Jan, Fev, Mar...).
       Seules les formules de TOTAUX sont automatiques.
 
-  QUAND AJOUTER row_total_column / total_row :
-    - "Quand tu as un tableau croisé lignes × colonnes numériques" → OUI aux deux
-    - Tableau d'amortissement classique (capital restant cumulé par mois) → NON (pas pertinent)
-    - Budget multi-catégories, ventes multi-zones, effectifs multi-périodes → OUI
-    - Tableau avec une seule colonne numérique → NON (le total a peu de sens)`;
+  QUAND NE PAS AJOUTER DE LIGNE DE TOTAUX :
+    - Tableau d'amortissement / VNC / mensualité où la somme des colonnes n'a pas de sens métier
+      → mets "total": "none" sur ces colonnes.
+    - Tableau sans aucune colonne de montant ou de quantité → aucune colonne "sum", donc pas de total.
+    - Une seule ligne d'exemple : pas de total automatique.
+    - Ne mets PAS "total_row": false pour éviter le total d'un montant : le moteur affichera
+      quand même les totaux des colonnes sommables. Utilise "total": "none" par colonne.`;
+
 
     // ─────────────────────────────────────────────────────────────────────────
     // Bloc réutilisable : règles de réponse partagées (règles absolues, checklist
@@ -577,6 +643,14 @@ Si l'utilisateur fournit des données de fichier importé (.xlsx, .xls, .csv) :
   ↆ C. Si la demande contient des concepts que tu as condensés en une seule colonne
       (ex: "intérêt et capital regroupés"), REPRISE et crée une colonne séprarée par concept.
   ↻ D. Si un doute subsiste sur une colonnefrontière : AJOUTE-LA plutôt que de l'omettre.
+  Σ E. TOTAUX : si le tableau contient au moins une colonne de montants de ligne
+      (Total HT, Total TTC, Montant, Budget, Salaire, Ventes...) et >= 2 lignes,
+      "total_row" DOIT être true. Chaque colonne numérique DOIT avoir un "total"
+      explicite ("sum", "once" ou "none"). Un prix unitaire, un taux, une année/date ou un
+      numéro est TOUJOURS "none" (jamais "sum").
+      Une agrégation constante (COUNTIFS/NB.SI.ENS, SUMIFS/SOMME.SI.ENS sans {row}) et toute
+      colonne de cumul sont TOUJOURS "once" (jamais "sum").
+      Le "total_row_label" doit être cohérent avec le tableau (pas "TOTAUX" partout).
 
 STRUCTURE DE RÉPONSE (respecter cet ordre) :
 1. La formule dans un bloc de code markdown.
@@ -597,6 +671,8 @@ STRUCTURE DE RÉPONSE (respecter cet ordre) :
    - ⚠️ RÈGLE DE COHÉRENCE DES DONNÉES D'EXEMPLE : Les valeurs recherchées (clés de recherche) DOIVENT correspondre EXACTEMENT aux valeurs présentes dans la table de référence. Par exemple, si la clé est "Clavier", la table de référence doit contenir "Clavier" et non "Clavier sans fil", sinon la formule renverra #N/D.
    - Chaque ligne de données doit avoir TOUTES ses colonnes remplies, y compris la dernière colonne avec le résultat attendu
    - NE PAS inclure de ligne séparée pour le résultat en bas du tableau. PAS de ligne "→ Résultat" ou "→ Mensualité" à la fin
+   - NE PAS ajouter de ligne "TOTAUX" dans le tableau Markdown : la ligne de totaux est
+     ajoutée automatiquement dans l'aperçu et l'export Excel à partir du schéma TABLE_SCHEMA
    - Les refs cellule dans la formule utilisent l'ordre alphabétique (C, D, E, F, G...) pour chaque colonne de données (de gauche à droite) :
      * 1ère colonne de données = C
      * 2ème colonne de données = D
