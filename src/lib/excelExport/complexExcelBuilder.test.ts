@@ -502,5 +502,64 @@ describe("complexExcelBuilder", () => {
     expect(sheet.getCell("C12").value).toBe(1200);
     expect(sheet.getCell("C13").value).toBe(3000);
   });
+
+  it("devrait démarrer à la ligne 4 sans lignes vides quand il n'y a pas de paramètres", () => {
+    const schema: TableSchema = {
+      type: "complex_table",
+      title: "Tableau sans paramètres",
+      parameters: [],
+      columns: [
+        { header: "Produit", type: "text", formula: null, formula_en: null },
+        { header: "Prix", type: "currency", formula: null, formula_en: null },
+      ],
+      data_start_row: 10,
+      sample_rows: 2,
+    };
+
+    const wb = new ExcelJS.Workbook();
+    const { workbook } = buildComplexWorkbook(wb, schema, "", "Prompt", "libreoffice-fr");
+
+    const sheet = workbook.getWorksheet("Tableau Interactif")!;
+    // Header should start at row 4, not row 10
+    expect(sheet.getCell("B4").value).toBe("N°");
+    expect(sheet.getCell("C4").value).toBe("Produit");
+    expect(sheet.getCell("D4").value).toBe("Prix");
+    // Row 5 has first data item
+    expect(sheet.getCell("B5").value).toBe(1);
+    expect(sheet.views?.[0]?.ySplit).toBe(4);
+  });
+
+  it("devrait appliquer le thème sélectionné (emerald), activer autofilter et ajuster la largeur de colonne B", () => {
+    const schema: TableSchema = {
+      type: "complex_table",
+      title: "Test Thème et Largeur",
+      parameters: [
+        { name: "Mode de calcul assurance très long", ref: "C5", value: "Standard", type: "text" },
+      ],
+      columns: [
+        { header: "Montant", type: "currency", formula: null, formula_en: null },
+      ],
+      data_start_row: 10,
+      sample_rows: 2,
+    };
+
+    const wb = new ExcelJS.Workbook();
+    const { workbook } = buildComplexWorkbook(wb, schema, "", "Prompt", "libreoffice-fr", {
+      theme: "emerald",
+    });
+
+    const sheet = workbook.getWorksheet("Tableau Interactif")!;
+    // Theme header color
+    const headerCell = sheet.getCell("C10");
+    const fill = headerCell.fill as ExcelJS.FillPattern;
+    expect(fill?.fgColor?.argb).toBe("FF064E3B");
+
+    // AutoFilter is configured on table bounds
+    expect(sheet.autoFilter).toBeDefined();
+
+    // Column B width widened to avoid truncated label
+    const colB = sheet.getColumn(2);
+    expect(colB.width).toBeGreaterThanOrEqual("Mode de calcul assurance très long".length);
+  });
 });
 

@@ -86,7 +86,7 @@ export function convertSimpleTableToSchema(response: string, promptTitle?: strin
     title: promptTitle ? promptTitle.slice(0, 60) : "Tableau de calcul",
     parameters,
     columns,
-    data_start_row: parseInt(rowToReplace, 10) || 10,
+    data_start_row: parameters.length > 0 ? (parseInt(rowToReplace, 10) || 10) : 4,
     sample_rows: Math.max(1, table.rows.length),
   };
 }

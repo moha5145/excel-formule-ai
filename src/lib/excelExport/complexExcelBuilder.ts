@@ -2,6 +2,7 @@ import ExcelJS from "exceljs";
 import { type TableSchema, type TableColumn, type ReferenceTable } from "./schemaParser";
 import { type ExportFormat, resolveFormulaTemplate, convertToUsInvariant } from "./postProcessFormula";
 import { extractTables } from "../excelExport";
+import { getExcelTheme } from "./excelTheme";
 
 interface BuildResult {
   workbook: ExcelJS.Workbook;
@@ -229,6 +230,7 @@ export interface CustomExportData {
   paramValues?: Record<string, string | number>;
   rowValues?: Record<string, string | number>[];
   sampleRows?: number;
+  theme?: string;
 }
 
 export function buildComplexWorkbook(
@@ -253,34 +255,36 @@ export function buildComplexWorkbook(
 
   sheetInteractif.views = [{ showGridLines: true }];
 
+  const theme = getExcelTheme(customData?.theme);
+
   const numCols = schema.columns.length;
   const rowTotalColCount = schema.row_total_column ? 1 : 0;
-  const lastColLetter = String.fromCharCode(66 + numCols + rowTotalColCount); // B est "Ligne", donc C, D, E... + colonne Total ligne optionnelle
+  const lastColLetter = String.fromCharCode(66 + numCols + rowTotalColCount); // B est "Ligne/N°", donc C, D, E... + colonne Total ligne optionnelle
   const endColLetter = lastColLetter > "H" ? lastColLetter : "H";
 
   // --- ONGLET : TABLEAU INTERACTIF ---
 
-  // L1 : Titre
-  sheetInteractif.mergeCells(`A1:${endColLetter}1`);
-  const t1 = sheetInteractif.getCell("A1");
-  t1.value = schema.title.toUpperCase();
-  t1.font = { name: "Segoe UI", size: 14, bold: true, color: { argb: WHITE } };
-  t1.fill = { type: "pattern", pattern: "solid", fgColor: { argb: SLATE_900 } };
-  t1.alignment = { vertical: "middle", horizontal: "center" };
-  sheetInteractif.getRow(1).height = 36;
+  // L1 : Titre moderne élégant (aligné à gauche, typographie soignée)
+  sheetInteractif.mergeCells(`B1:${endColLetter}1`);
+  const t1 = sheetInteractif.getCell("B1");
+  t1.value = schema.title;
+  t1.font = { name: "Segoe UI", size: 14, bold: true, color: { argb: theme.titleText } };
+  t1.alignment = { vertical: "middle", horizontal: "left" };
+  sheetInteractif.getRow(1).height = 28;
 
-  // L2 : Barre jaune
-  sheetInteractif.mergeCells(`A2:${endColLetter}2`);
-  sheetInteractif.getCell("A2").fill = { type: "pattern", pattern: "solid", fgColor: { argb: YELLOW } };
-  sheetInteractif.getRow(2).height = 4;
-
-  // L3 : Description
-  sheetInteractif.mergeCells(`A3:${endColLetter}3`);
-  const descCell = sheetInteractif.getCell("A3");
-  descCell.value = prompt;
-  descCell.font = { name: "Segoe UI", size: 11, bold: true, color: { argb: SLATE_900 } };
+  // L2 : Description / Sous-titre propre
+  sheetInteractif.mergeCells(`B2:${endColLetter}2`);
+  const descCell = sheetInteractif.getCell("B2");
+  const isDuplicatePrompt = prompt && prompt.trim().toLowerCase() === schema.title.trim().toLowerCase();
+  descCell.value = isDuplicatePrompt || !prompt ? "Modèle de simulation & calcul automatisé" : prompt.trim();
+  descCell.font = { name: "Segoe UI", size: 10, italic: true, color: { argb: theme.subtitleText } };
   descCell.alignment = { vertical: "middle", horizontal: "left", wrapText: true };
-  sheetInteractif.getRow(3).height = 28;
+  sheetInteractif.getRow(2).height = 20;
+
+  // L3 : Séparateur d'accent discret
+  sheetInteractif.mergeCells(`B3:${endColLetter}3`);
+  sheetInteractif.getCell("B3").fill = { type: "pattern", pattern: "solid", fgColor: { argb: theme.accent } };
+  sheetInteractif.getRow(3).height = 2;
 
   // Zone paramètres (si présents)
   if (schema.parameters && schema.parameters.length > 0) {
@@ -293,21 +297,28 @@ export function buildComplexWorkbook(
 
       // Label dans la colonne à gauche
       const labelColLetter = String.fromCharCode(colLetter.charCodeAt(0) - 1);
+      const labelColIdx = colLetter.charCodeAt(0) - 64 - 1;
       const labelCell = sheetInteractif.getCell(`${labelColLetter}${rowNum}`);
       labelCell.value = param.name;
-      labelCell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: SLATE_700 } };
+      labelCell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: theme.subtitleText } };
       labelCell.alignment = { vertical: "middle", horizontal: "left" };
+
+      // S'assurer que la colonne du label ne coupe pas le texte (ex: "Mode de calcul assurance" -> 25 car.)
+      if (labelColIdx >= 1) {
+        const curColWidth = sheetInteractif.getColumn(labelColIdx).width || 16;
+        sheetInteractif.getColumn(labelColIdx).width = Math.max(curColWidth, param.name.length + 3);
+      }
 
       // Cellule du paramètre
       const valCell = sheetInteractif.getCell(cellRef);
 
-      // Déterminer le style selon le type : calculé (vert) ou statique (jaune)
+      // Déterminer le style selon le type : calculé ou statique
       const isCalculated = param.formula !== undefined && param.formula !== null;
-      const bgColor = isCalculated ? GREEN_BG : LIGHT_YELLOW;
-      const borderColor = isCalculated ? GREEN_BORDER : GOLD_BORDER;
-      const fontColor = isCalculated ? GREEN_TEXT : SLATE_900;
+      const bgColor = isCalculated ? theme.calcBg : theme.inputBg;
+      const borderColor = isCalculated ? theme.calcBorder : theme.inputBorder;
+      const fontColor = isCalculated ? theme.calcTextColor : theme.inputTextColor;
 
-      valCell.font = { name: "Segoe UI", size: 10, bold: !isCalculated, color: { argb: fontColor } };
+      valCell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: fontColor } };
       valCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bgColor } };
       valCell.border = {
         top: { style: "thin", color: { argb: borderColor } },
@@ -323,11 +334,6 @@ export function buildComplexWorkbook(
       const effectiveParamVal = customParamVal !== undefined ? customParamVal : param.value;
 
       if (isCalculated) {
-        // Paramètre calculé : injecter la formule via ExcelJS.
-        // TableParameter n'expose pas formula_en (contrairement à TableColumn),
-        // donc on ne peut PAS présumer que param.formula est déjà US-invariant.
-        // On laisse convertToUsInvariant convertir les ; → , et les noms FR → EN
-        // pour les formats français (excel-fr / libreoffice-fr / sheets-fr).
         const resolved = resolveFormulaTemplate(param.formula!, 1, format, false);
         valCell.value = { formula: resolved.replace(/^=/, "") };
       } else if (param.type === "text") {
@@ -340,37 +346,51 @@ export function buildComplexWorkbook(
       // Appliquer le format numérique selon le type
       setCellFormatByType(valCell, param.type);
     }
-    // Légende sous la zone paramètres (1ère ligne vide avant le tableau)
   }
 
   // Headers du tableau de données
-  const startRow = schema.data_start_row || 10;
-  const headerRow = sheetInteractif.getRow(startRow);
-  headerRow.height = 36;
+  // Si le schéma a des paramètres, on respecte leur position (startRow = schema.data_start_row || 10).
+  // Si aucun paramètre n'est défini et qu'aucune formule ne référence de ligne fixe comme $10 ou $11,
+  // on commence dès la ligne 4 pour éviter un vide béant de 6 lignes blanches !
+  const hasParams = Boolean(schema.parameters && schema.parameters.length > 0);
+  const hasFixedRowRanges = schema.columns.some((c) =>
+    Boolean((c.formula || c.formula_en || "").match(/\$[A-Z]+\$(10|11|12|13|14|15|16|17|18|19|20)/))
+  );
+  const startRow = (!hasParams && !hasFixedRowRanges && schema.data_start_row === 10)
+    ? 4
+    : (schema.data_start_row || 10);
 
-  const bHeader = headerRow.getCell(2); // Colonne B "Ligne"
-  bHeader.value = "Ligne";
-  bHeader.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: WHITE } };
-  bHeader.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF334155" } };
+  const headerRow = sheetInteractif.getRow(startRow);
+  headerRow.height = 32;
+
+  // Extraire les données d'exemple du Markdown pour adapter l'en-tête de numérotation
+  const mdTables = extractTables(response);
+  const mdTable = mdTables[0];
+  const hasExplicitLigneInMd = Boolean(mdTable?.headers?.[0]?.toLowerCase().includes("ligne"));
+
+  const bHeader = headerRow.getCell(2); // Colonne B "N°" ou "Ligne"
+  bHeader.value = hasExplicitLigneInMd ? "Ligne" : "N°";
+  bHeader.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: theme.headerText } };
+  bHeader.fill = { type: "pattern", pattern: "solid", fgColor: { argb: theme.headerBg } };
   bHeader.alignment = { horizontal: "center", vertical: "middle" };
   bHeader.border = {
-    top: { style: "thin", color: { argb: "FF475569" } },
-    bottom: { style: "medium", color: { argb: "FF1E293B" } },
-    left: { style: "thin", color: { argb: "FF475569" } },
-    right: { style: "thin", color: { argb: "FF475569" } },
+    top: { style: "thin", color: { argb: theme.headerBorder } },
+    bottom: { style: "medium", color: { argb: theme.headerBorder } },
+    left: { style: "thin", color: { argb: theme.headerBorder } },
+    right: { style: "thin", color: { argb: theme.headerBorder } },
   };
 
   for (let c = 0; c < numCols; c++) {
     const cell = headerRow.getCell(3 + c); // Colonne C, D, E...
     cell.value = schema.columns[c].header;
-    cell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: WHITE } };
-    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF334155" } };
+    cell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: theme.headerText } };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: theme.headerBg } };
     cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
     cell.border = {
-      top: { style: "thin", color: { argb: "FF475569" } },
-      bottom: { style: "medium", color: { argb: "FF1E293B" } },
-      left: { style: "thin", color: { argb: "FF475569" } },
-      right: { style: "thin", color: { argb: "FF475569" } },
+      top: { style: "thin", color: { argb: theme.headerBorder } },
+      bottom: { style: "medium", color: { argb: theme.headerBorder } },
+      left: { style: "thin", color: { argb: theme.headerBorder } },
+      right: { style: "thin", color: { argb: theme.headerBorder } },
     };
   }
 
@@ -392,9 +412,6 @@ export function buildComplexWorkbook(
     };
   }
 
-  // Extraire les données d'exemple du Markdown si possible
-  const mdTables = extractTables(response);
-  const mdTable = mdTables[0];
   const colMappings: number[] = [];
   if (mdTable) {
     for (let c = 0; c < numCols; c++) {
@@ -424,10 +441,19 @@ export function buildComplexWorkbook(
     const row = sheetInteractif.getRow(currRowIndex);
     row.height = 22;
 
+    const rowBg = r % 2 === 0 ? "FFFFFFFF" : theme.zebraBg;
+
     const labelCell = row.getCell(2);
-    labelCell.value = `Ligne ${r + 1}`;
-    labelCell.font = { name: "Segoe UI", size: 10, color: { argb: "FF475569" } };
-    labelCell.alignment = { vertical: "middle" };
+    labelCell.value = hasExplicitLigneInMd ? `Ligne ${r + 1}` : r + 1;
+    labelCell.font = { name: "Segoe UI", size: 9, color: { argb: "FF64748B" } };
+    labelCell.alignment = { vertical: "middle", horizontal: "center" };
+    labelCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: rowBg } };
+    labelCell.border = {
+      top: { style: "thin", color: { argb: "FFE2E8F0" } },
+      bottom: { style: "thin", color: { argb: "FFE2E8F0" } },
+      left: { style: "thin", color: { argb: "FFE2E8F0" } },
+      right: { style: "thin", color: { argb: "FFE2E8F0" } },
+    };
 
     for (let c = 0; c < numCols; c++) {
       const col = schema.columns[c];
@@ -442,13 +468,13 @@ export function buildComplexWorkbook(
           warnings.push(`Erreur formule col "${col.header}" ligne ${currRowIndex}: ${(err as Error).message}`);
           cell.value = "";
         }
-        cell.font = { name: "Segoe UI", size: 10, color: { argb: GREEN_TEXT } };
-        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: GREEN_BG } };
+        cell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: theme.calcTextColor } };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: rowBg } };
         cell.border = {
-          top: { style: "thin", color: { argb: GREEN_BORDER } },
-          bottom: { style: "thin", color: { argb: GREEN_BORDER } },
-          left: { style: "thin", color: { argb: GREEN_BORDER } },
-          right: { style: "thin", color: { argb: GREEN_BORDER } },
+          top: { style: "thin", color: { argb: theme.calcBorder } },
+          bottom: { style: "thin", color: { argb: theme.calcBorder } },
+          left: { style: "thin", color: { argb: theme.calcBorder } },
+          right: { style: "thin", color: { argb: theme.calcBorder } },
         };
         // Appliquer le formatage numérique (numFmt)
         setCellFormatByType(cell, col.type);
@@ -496,13 +522,13 @@ export function buildComplexWorkbook(
         }
 
         setCellValueByType(cell, col.type, val);
-        cell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: SLATE_900 } };
-        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: LIGHT_YELLOW } };
+        cell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: theme.inputTextColor } };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: theme.inputBg } };
         cell.border = {
-          top: { style: "thin", color: { argb: GOLD_BORDER } },
-          bottom: { style: "thin", color: { argb: GOLD_BORDER } },
-          left: { style: "thin", color: { argb: GOLD_BORDER } },
-          right: { style: "thin", color: { argb: GOLD_BORDER } },
+          top: { style: "thin", color: { argb: theme.inputBorder } },
+          bottom: { style: "thin", color: { argb: theme.inputBorder } },
+          left: { style: "thin", color: { argb: theme.inputBorder } },
+          right: { style: "thin", color: { argb: theme.inputBorder } },
         };
       }
       cell.alignment = { vertical: "middle", horizontal: col.type === "text" ? "left" : "right" };
@@ -523,15 +549,11 @@ export function buildComplexWorkbook(
     }
 
     // ── Cellule "Total de ligne" optionnelle (pivot léger) ──
-    // SUM automatique des colonnes NUMÉRIQUES seulement (currency/percentage/integer/number).
-    // On exclut le texte et les dates car leur somme n'a pas de sens.
     if (rowTotal) {
       const totalCell = row.getCell(rowTotalColIndex);
-      // Indices Excel (1-based, 3 = C) des colonnes numériques
       const numericIndices = schema.columns
         .map((c, i) => ((["currency", "percentage", "integer", "number"].includes(c.type)) ? 3 + i : -1))
         .filter((i) => i >= 0);
-      // Construction de la formule SUM (range si contigu, liste sinon)
       let sumExpr: string;
       if (numericIndices.length === 0) {
         sumExpr = "0";
@@ -539,7 +561,6 @@ export function buildComplexWorkbook(
         const letter = String.fromCharCode(64 + numericIndices[0]);
         sumExpr = `${letter}${currRowIndex}`;
       } else {
-        // Détecte contiguïté
         let isContiguous = true;
         for (let k = 1; k < numericIndices.length; k++) {
           if (numericIndices[k] !== numericIndices[k - 1] + 1) { isContiguous = false; break; }
@@ -557,47 +578,45 @@ export function buildComplexWorkbook(
       totalCell.value = { formula: `SUM(${sumExpr})` };
       const totalType = rowTotal.type || "currency";
       setCellFormatByType(totalCell, totalType);
-      totalCell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: WHITE } };
-      totalCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0F766E" } }; // teal-700
+      totalCell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: theme.calcTextColor } };
+      totalCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: rowBg } };
       totalCell.border = {
-        top: { style: "thin", color: { argb: "FF0F766E" } },
-        bottom: { style: "thin", color: { argb: "FF0F766E" } },
-        left: { style: "medium", color: { argb: "FF1E293B" } },
-        right: { style: "thin", color: { argb: "FF475569" } },
+        top: { style: "thin", color: { argb: theme.calcBorder } },
+        bottom: { style: "thin", color: { argb: theme.calcBorder } },
+        left: { style: "medium", color: { argb: theme.headerBorder } },
+        right: { style: "thin", color: { argb: theme.calcBorder } },
       };
       totalCell.alignment = { vertical: "middle", horizontal: "right" };
     }
   }
 
   // ── Ligne TOTAUX optionnelle (pivot léger) ──
-  // Écrite après les lignes de données, avant la ligne d'instructions.
   const hasTotalRow = schema.total_row === true;
   const totalRowLabel = schema.total_row_label || "TOTAUX";
+  const firstDataExpRow = startRow + 1;
+  const lastDataExpRow = startRow + sampleRowsCount;
+
   if (hasTotalRow) {
-    const totalRowIndex = startRow + 1 + sampleRowsCount;
+    const totalRowIndex = lastDataExpRow + 1;
     const tRow = sheetInteractif.getRow(totalRowIndex);
     tRow.height = 24;
 
-    const labelCell = tRow.getCell(2); // Colonne B "Ligne"
+    const labelCell = tRow.getCell(2); // Colonne B "N° / Ligne"
     labelCell.value = totalRowLabel;
-    labelCell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: WHITE } };
-    labelCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E293B" } };
+    labelCell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: theme.totalText } };
+    labelCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: theme.totalBg } };
     labelCell.alignment = { vertical: "middle", horizontal: "right" };
     labelCell.border = {
-      top: { style: "medium", color: { argb: "FF1E293B" } },
-      bottom: { style: "medium", color: { argb: "FF1E293B" } },
-      left: { style: "thin", color: { argb: "FF475569" } },
-      right: { style: "thin", color: { argb: "FF475569" } },
+      top: { style: "thin", color: { argb: theme.headerBorder } },
+      bottom: { style: "double", color: { argb: theme.totalBorder } },
+      left: { style: "thin", color: { argb: theme.headerBorder } },
+      right: { style: "thin", color: { argb: theme.headerBorder } },
     };
 
-    const firstDataExpRow = startRow + 1;
-    const lastDataExpRow = startRow + sampleRowsCount;
     for (let c = 0; c < numCols; c++) {
       const col = schema.columns[c];
       const cell = tRow.getCell(3 + c);
       const isNumeric = ["currency", "percentage", "integer", "number"].includes(col.type);
-      // Pour les colonnes text/date : on laisse VIDE (pas de sens de sommer).
-      // Pour les colonnes numériques : SUM verticale sur les lignes de données.
       if (isNumeric) {
         const colLetter = String.fromCharCode(67 + c);
         const sumRange = `${colLetter}${firstDataExpRow}:${colLetter}${lastDataExpRow}`;
@@ -606,56 +625,64 @@ export function buildComplexWorkbook(
         cell.value = ""; // colonne non sommable
       }
       setCellFormatByType(cell, col.type);
-      cell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: WHITE } };
-      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0F766E" } };
+      cell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: theme.totalText } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: theme.totalBg } };
       cell.border = {
-        top: { style: "medium", color: { argb: "FF1E293B" } },
-        bottom: { style: "medium", color: { argb: "FF1E293B" } },
-        left: { style: "thin", color: { argb: "FF475569" } },
-        right: { style: "thin", color: { argb: "FF475569" } },
+        top: { style: "thin", color: { argb: theme.headerBorder } },
+        bottom: { style: "double", color: { argb: theme.totalBorder } },
+        left: { style: "thin", color: { argb: "FFE2E8F0" } },
+        right: { style: "thin", color: { argb: "FFE2E8F0" } },
       };
       cell.alignment = { vertical: "middle", horizontal: col.type === "text" ? "left" : "right" };
     }
 
-    // Total de la colonne "Total ligne" : SUM de la colonne total (intersection)
+    // Total de la colonne "Total ligne"
     if (rowTotal) {
       const cell = tRow.getCell(rowTotalColIndex);
-      const colLetter = String.fromCharCode(67 + numCols); // colonne après les données
+      const colLetter = String.fromCharCode(67 + numCols);
       const sumRange = `${colLetter}${firstDataExpRow}:${colLetter}${lastDataExpRow}`;
       cell.value = { formula: `SUM(${sumRange})` };
       const totalType = rowTotal.type || "currency";
       setCellFormatByType(cell, totalType);
-      cell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: WHITE } };
-      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF134E4A" } }; // teal-800
+      cell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: theme.totalText } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: theme.totalBg } };
       cell.border = {
-        top: { style: "medium", color: { argb: "FF1E293B" } },
-        bottom: { style: "medium", color: { argb: "FF1E293B" } },
-        left: { style: "medium", color: { argb: "FF1E293B" } },
-        right: { style: "thin", color: { argb: "FF475569" } },
+        top: { style: "thin", color: { argb: theme.headerBorder } },
+        bottom: { style: "double", color: { argb: theme.totalBorder } },
+        left: { style: "medium", color: { argb: theme.headerBorder } },
+        right: { style: "thin", color: { argb: theme.headerBorder } },
       };
       cell.alignment = { vertical: "middle", horizontal: "right" };
     }
   }
 
-  // Ligne d'instructions après le tableau (+1 si ligne TOTAUX présente)
-  const instrRowIndex = startRow + 1 + sampleRowsCount + (hasTotalRow ? 1 : 0);
-  sheetInteractif.mergeCells(`B${instrRowIndex}:H${instrRowIndex}`);
+  // Ligne d'instructions discrète après le tableau
+  const instrRowIndex = lastDataExpRow + (hasTotalRow ? 2 : 1);
+  sheetInteractif.mergeCells(`B${instrRowIndex}:${endColLetter}${instrRowIndex}`);
   const instrCell1 = sheetInteractif.getCell(`B${instrRowIndex}`);
-  instrCell1.value = "💡 Modifiez les valeurs jaunes pour tester d'autres scénarios. Les résultats (verts) se recalculent automatiquement.";
-  instrCell1.font = { name: "Segoe UI", size: 9, italic: true, color: { argb: SLATE_500 } };
-  sheetInteractif.getRow(instrRowIndex).height = 18;
+  instrCell1.value = "💡 Conseil : modifiez les cellules teintées pour tester d'autres scénarios. Retrouvez le détail des formules dans l'onglet « Formule & Guide ».";
+  instrCell1.font = { name: "Segoe UI", size: 9, italic: true, color: { argb: "FF64748B" } };
+  sheetInteractif.getRow(instrRowIndex).height = 20;
 
-  // Ligne d'incitation à régénérer (anti-omission de colonnes par l'IA)
-  const regenRowIndex = instrRowIndex + 1;
-  sheetInteractif.mergeCells(`B${regenRowIndex}:H${regenRowIndex}`);
-  const regenCell = sheetInteractif.getCell(`B${regenRowIndex}`);
-  regenCell.value = "🔍 Une colonne manque ou le tableau est incomplet ? Régénérez la formule dans l'application Excel-Formule AI — l'IA a elle-même jugé votre demande trop riche pour un tableau simple et a basculé en mode complexe ; une nouvelle génération donne généralement toutes les colonnes attendues.";
-  regenCell.font = { name: "Segoe UI", size: 9, italic: true, color: { argb: "FF2563EB" } };
-  sheetInteractif.getRow(regenRowIndex).height = 28;
+  // Volet figé : fige les lignes au-dessus des données pour garder les en-têtes visibles au défilement
+  sheetInteractif.views = [
+    {
+      state: "frozen",
+      ySplit: startRow,
+      showGridLines: true,
+    },
+  ];
+
+  // Filtres automatiques sur les en-têtes de colonnes
+  sheetInteractif.autoFilter = {
+    from: { row: startRow, column: 2 },
+    to: { row: lastDataExpRow, column: 2 + numCols + rowTotalColCount },
+  };
 
   // Largeurs colonnes Tableau Interactif (dynamiques)
-  sheetInteractif.getColumn(1).width = 4;
-  sheetInteractif.getColumn(2).width = 16;
+  sheetInteractif.getColumn(1).width = 3;
+  const curBWidth = sheetInteractif.getColumn(2).width;
+  sheetInteractif.getColumn(2).width = Math.max(curBWidth || 8, hasExplicitLigneInMd ? 14 : 8);
   for (let c = 0; c < numCols; c++) {
     const col = schema.columns[c];
     let maxLen = col.header.length;

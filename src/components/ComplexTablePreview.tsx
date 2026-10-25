@@ -17,6 +17,7 @@ export interface CustomExportData {
   paramValues?: Record<string, string | number>;
   rowValues?: Record<string, string | number>[];
   sampleRows?: number;
+  theme?: string;
 }
 
 interface ComplexTablePreviewProps {
@@ -106,6 +107,7 @@ export function ComplexTablePreview({
   }, [rawSchema, modifSchema]);
 
   const [sampleRows, setSampleRows] = useState<number>(() => schema?.sample_rows || 3);
+  const [selectedTheme, setSelectedTheme] = useState<string>("corporate");
   const [paramValues, setParamValues] = useState<Record<number, string>>(() =>
     Object.fromEntries((schema?.parameters || []).map((p, i) => [i, String(p.value ?? "")]))
   );
@@ -189,8 +191,9 @@ export function ComplexTablePreview({
       paramValues: customParams,
       rowValues: customRows,
       sampleRows,
+      theme: selectedTheme,
     });
-  }, [onDownloadExcel, schema, sampleRows, paramValues, inputValues]);
+  }, [onDownloadExcel, schema, sampleRows, paramValues, inputValues, selectedTheme]);
 
   // ── CAS A : Modification in-place sur fichier importé ──
   if (modifSchema) {
@@ -339,14 +342,27 @@ export function ComplexTablePreview({
           </span>
         </div>
         {onDownloadExcel && (
-          <Button
-            size="sm"
-            onClick={handleDownload}
-            className="h-8 gap-1.5 text-xs rounded-xl shrink-0 cursor-pointer"
-          >
-            <Download className="h-3.5 w-3.5" />
-            Exporter .xlsx
-          </Button>
+          <div className="flex items-center gap-2">
+            <select
+              value={selectedTheme}
+              onChange={(e) => setSelectedTheme(e.target.value)}
+              className="h-8 px-2 text-xs rounded-xl bg-background border border-border text-foreground font-medium focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+              title="Style et thème de l'export Excel"
+            >
+              <option value="corporate">🎨 Bleu Corporate</option>
+              <option value="emerald">🎨 Émeraude Finance</option>
+              <option value="indigo">🎨 Royal Indigo</option>
+              <option value="minimal">🎨 Minimal N&B</option>
+            </select>
+            <Button
+              size="sm"
+              onClick={handleDownload}
+              className="h-8 gap-1.5 text-xs rounded-xl shrink-0 cursor-pointer shadow-sm"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Exporter .xlsx
+            </Button>
+          </div>
         )}
       </div>
 
