@@ -17,28 +17,132 @@ export interface FileContext {
   fileType?: "xlsx" | "xls" | "csv";
 }
 
-export const FORMULA_EXAMPLES: { label: string; keywords: string }[] = [
-  { label: "Sélectionnez un exemple rapide...", keywords: "" },
-  { label: "Mensualité d'un prêt de 250 000€ sur 20 ans à 3.5%", keywords: "mensualité" },
-  { label: "Retrouver un prix depuis une liste produit", keywords: "prix" },
-  { label: "Prime selon CA et marge avec SI imbriqués", keywords: "prime" },
-  { label: "Calculer la TVA à 20% d'un montant HT", keywords: "tva" },
-  { label: "Compter les factures impayées de plus de 1000€", keywords: "nb.si" },
-  { label: "Somme des ventes de la région Nord depuis le 01/01/2024", keywords: "somme.si" },
-  { label: "Extraire l'année fiscale d'une date en cellule B2", keywords: "date" },
-  { label: "Convertir des minutes en heures et minutes (ex: 135 -> 2h15)", keywords: "texte" },
-  { label: "Trouver le salaire maximum des employés du service Marketing", keywords: "maximum" },
-  { label: "Créer une liste déroulante dynamique pour restreindre la saisie", keywords: "validation" },
-  { label: "Amortissement linéaire d'une immobilisation sur 5 ans", keywords: "amortissement" },
-  { label: "Extraire le mois et l'année d'une date de facture", keywords: "mois" },
-  { label: "Chercher le taux de commission selon un palier de CA", keywords: "commission" },
-  { label: "Calculer le salaire net (déduire 22% de charges du brut)", keywords: "salaire net" },
-  { label: "Compter le nombre de jours ouvrés entre deux dates", keywords: "jours ouvrés" },
-  { label: "Calculer un taux de marge commerciale en pourcentage", keywords: "marge" },
-  { label: "Déterminer le seuil de rentabilité (point mort en jours)", keywords: "point mort" },
-  { label: "Calcul du coût total d'un crédit avec assurance", keywords: "crédit" },
-  { label: "Calculer la VNC après 3 ans d'amortissement", keywords: "vnc" },
-  { label: "Répartir un budget annuel au prorata des jours du mois", keywords: "prorata" },
+export interface FormulaExample {
+  label: string;
+  keywords: string;
+  category?: string;
+}
+
+export const FORMULA_CATEGORIES = [
+  "🧾 Ventes & Facturation",
+  "💰 Finance & Budget",
+  "👥 RH & Paie",
+  "📊 Données & Fonctions 365",
+  "🗓️ Dates & Formules Pratiques",
+] as const;
+
+export const FORMULA_EXAMPLES: FormulaExample[] = [
+  { label: "Sélectionnez un exemple rapide...", keywords: "", category: "" },
+
+  // 🧾 Ventes & Facturation
+  {
+    label: "Tableau de commande avec Quantité, Prix HT, TVA 20% et Total TTC",
+    keywords: "commande",
+    category: "🧾 Ventes & Facturation",
+  },
+  {
+    label: "Retrouver le prix unitaire d'un produit avec RECHERCHEX selon sa référence",
+    keywords: "recherchex",
+    category: "🧾 Ventes & Facturation",
+  },
+  {
+    label: "Barème de commission commercial progressif selon le chiffre d'affaires",
+    keywords: "commission",
+    category: "🧾 Ventes & Facturation",
+  },
+  {
+    label: "Calculer le taux de marge et le taux de marque d'un produit en pourcentage",
+    keywords: "marge",
+    category: "🧾 Ventes & Facturation",
+  },
+
+  // 💰 Finance & Budget
+  {
+    label: "Mensualité d'un prêt de 250 000 € sur 20 ans à 3,5 % (fonction VPM)",
+    keywords: "mensualité",
+    category: "💰 Finance & Budget",
+  },
+  {
+    label: "Budget marketing par service et par mois avec totaux général et trimestriel",
+    keywords: "budget",
+    category: "💰 Finance & Budget",
+  },
+  {
+    label: "Tableau d'amortissement linéaire d'une machine de 15 000 € sur 5 ans",
+    keywords: "amortissement",
+    category: "💰 Finance & Budget",
+  },
+  {
+    label: "Seuil de rentabilité et point mort en jours selon charges fixes et variables",
+    keywords: "point mort",
+    category: "💰 Finance & Budget",
+  },
+
+  // 👥 RH & Paie
+  {
+    label: "Calculer le salaire net à payer à partir du brut (déduction 22% de cotisations)",
+    keywords: "salaire net",
+    category: "👥 RH & Paie",
+  },
+  {
+    label: "Calculer les heures supplémentaires majorées à 25% au-delà de 35h",
+    keywords: "heures sup",
+    category: "👥 RH & Paie",
+  },
+  {
+    label: "Trouver le salaire maximum des employés du service Marketing (MAX.SI.ENS)",
+    keywords: "maximum",
+    category: "👥 RH & Paie",
+  },
+  {
+    label: "Nombre de jours ouvrés entre deux dates hors week-ends et jours fériés",
+    keywords: "jours ouvrés",
+    category: "👥 RH & Paie",
+  },
+
+  // 📊 Données & Fonctions 365
+  {
+    label: "Extraire une liste sans doublons et triée alphabétiquement (UNIQUE et TRIER)",
+    keywords: "unique",
+    category: "📊 Données & Fonctions 365",
+  },
+  {
+    label: "Filtrer dynamiquement la liste des factures impayées avec la fonction FILTRE",
+    keywords: "filtre",
+    category: "📊 Données & Fonctions 365",
+  },
+  {
+    label: "Compter les factures impayées de plus de 1 000 € avec NB.SI.ENS",
+    keywords: "nb.si",
+    category: "📊 Données & Fonctions 365",
+  },
+  {
+    label: "Somme des ventes de la région Nord depuis le 01/01/2024 (SOMME.SI.ENS)",
+    keywords: "somme.si",
+    category: "📊 Données & Fonctions 365",
+  },
+
+  // 🗓️ Dates & Formules Pratiques
+  {
+    label: "Alerte d'échéance : afficher \"En retard\", \"À payer\" ou \"Réglée\" selon la date",
+    keywords: "échéance",
+    category: "🗓️ Dates & Formules Pratiques",
+  },
+  {
+    label: "Calculer une prime avec conditions multiples (CA > 50 000 € et marge ≥ 20%)",
+    keywords: "prime",
+    category: "🗓️ Dates & Formules Pratiques",
+  },
+  {
+    label: "Déterminer l'année fiscale d'une date (exercice clôturé au 30 juin)",
+    keywords: "date",
+    category: "🗓️ Dates & Formules Pratiques",
+  },
+  {
+    label: "Convertir un total de minutes en format heures et minutes (ex: 135 min → 2h15)",
+    keywords: "texte",
+    category: "🗓️ Dates & Formules Pratiques",
+  },
 ];
 
 interface FormulaInputBarProps {
@@ -383,7 +487,7 @@ export function FormulaInputBar({
             <div className="flex items-center gap-2 sm:gap-3">
               {/* SELECT EXEMPLES */}
               {onSelectExample && (
-                <div className="relative w-8 sm:w-48">
+                <div className="relative w-8 sm:w-60 md:w-64">
                   <select
                     className="hidden sm:block w-full h-8 bg-transparent text-[11px] text-muted-foreground hover:text-foreground border border-border/60 rounded-lg px-2 pr-6 appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary/50 transition-colors truncate"
                     value={selectedExampleIndex}
@@ -397,11 +501,19 @@ export function FormulaInputBar({
                       }
                     }}
                   >
-                    <option value={0} disabled className="bg-background">
-                      {selectedExampleLabel || "Exemples"}
+                    <option value={0} disabled className="bg-background text-muted-foreground font-medium">
+                      {selectedExampleLabel || "Exemples rapides"}
                     </option>
-                    {FORMULA_EXAMPLES.slice(1).map((ex, i) => (
-                      <option key={i} value={i + 1} className="bg-background text-foreground truncate">{ex.label}</option>
+                    {FORMULA_CATEGORIES.map((category) => (
+                      <optgroup key={category} label={category} className="bg-background text-foreground font-semibold">
+                        {FORMULA_EXAMPLES.map((ex, idx) => ({ ex, idx }))
+                          .filter(({ ex }) => ex.category === category)
+                          .map(({ ex, idx }) => (
+                            <option key={idx} value={idx} className="bg-background text-foreground font-normal truncate">
+                              {ex.label}
+                            </option>
+                          ))}
+                      </optgroup>
                     ))}
                   </select>
                   <button
@@ -424,21 +536,32 @@ export function FormulaInputBar({
                         onClick={() => setExampleMenuOpen(false)}
                         aria-hidden="true"
                       />
-                      <div className="fixed inset-x-0 bottom-20 z-50 mx-4 max-h-72 overflow-y-auto rounded-xl border border-border bg-background p-1 shadow-2xl">
-                        {FORMULA_EXAMPLES.slice(1).map((ex, i) => (
-                          <button
-                            key={i}
-                            type="button"
-                            onClick={() => {
-                              onSelectExample(ex);
-                              setSelectedExampleLabel(ex.label);
-                              setSelectedExampleIndex(0);
-                              setExampleMenuOpen(false);
-                            }}
-                            className="w-full rounded-lg px-3 py-2 text-left text-xs text-foreground hover:bg-muted hover:text-foreground"
-                          >
-                            {ex.label}
-                          </button>
+                      <div className="fixed inset-x-0 bottom-20 z-50 mx-4 max-h-80 overflow-y-auto rounded-xl border border-border bg-background p-2 shadow-2xl">
+                        {FORMULA_CATEGORIES.map((category) => (
+                          <div key={category} className="mb-2.5 last:mb-0">
+                            <div className="px-2 py-1 text-[11px] font-semibold text-muted-foreground">
+                              {category}
+                            </div>
+                            <div className="space-y-0.5">
+                              {FORMULA_EXAMPLES.map((ex, idx) => ({ ex, idx }))
+                                .filter(({ ex }) => ex.category === category)
+                                .map(({ ex, idx }) => (
+                                  <button
+                                    key={idx}
+                                    type="button"
+                                    onClick={() => {
+                                      onSelectExample(ex);
+                                      setSelectedExampleLabel(ex.label);
+                                      setSelectedExampleIndex(0);
+                                      setExampleMenuOpen(false);
+                                    }}
+                                    className="w-full rounded-lg px-2.5 py-1.5 text-left text-xs text-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
+                                  >
+                                    {ex.label}
+                                  </button>
+                                ))}
+                            </div>
+                          </div>
                         ))}
                       </div>
                     </>
