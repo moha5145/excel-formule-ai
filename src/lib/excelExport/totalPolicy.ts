@@ -5,18 +5,34 @@ export type ColumnTotal = "sum" | "none" | "auto" | "once";
 const NUMERIC_TYPES = new Set(["currency", "percentage", "integer", "number"]);
 
 // En-têtes qui ne représentent JAMAIS une grandeur additive : même un
-// "total": "sum" erroné du modèle est ignoré (années, dates, IDs, taux...).
+// "total": "sum" erroné du modèle est ignoré (années, dates, IDs, taux, prix unitaires, moyennes...).
 const NEVER_SUM_HEADER_PATTERNS: RegExp[] = [
-  /prix\s*unitaire/,
-  /cout\s*unitaire/,
+  // Prix et coûts unitaires, tarifs horaires/journaliers
+  /prix\s*(?:u\b|unit\b|unitaire|catalogue|standard|achat\s*unitaire|vente\s*unitaire)/,
+  /cout\s*(?:u\b|unit\b|unitaire|achat\s*unitaire|revient\s*unitaire)/,
   /unit\s*price/,
   /unit\s*cost/,
+  /\bpu\b/,
+  /\bp\.u\.?\b/,
+  /pu\s*(?:ht|ttc)/,
+  /tarif\s*(?:u\b|unit\b|unitaire|horaire|journalier|jour\b|heure\b)/,
+  /\btjm\b/,
+  /\bcjm\b/,
+  /taux\s*(?:horaire|journalier|marge|marque|tva)/,
+  /forfait\s*unitaire/,
+  /valeur\s*unitaire/,
+
+  // Taux, pourcentages, remises
   /\btaux\b/,
   /\brate\b/,
   /pourcentage/,
   /percent/,
   /remise/,
   /discount/,
+  /rabais/,
+  /ristourne/,
+
+  // Éléments calendaires / temporels
   /annee/,
   /\byear\b/,
   /\bmois\b/,
@@ -24,24 +40,69 @@ const NEVER_SUM_HEADER_PATTERNS: RegExp[] = [
   /\bjour\b/,
   /\bday\b/,
   /date/,
-  /duree/,
-  /duration/,
-  /\bage\b/,
   /exercice/,
+  /semaine\s*n[°o]?/,
+
+  // Identifiants, codes, références
   /numero/,
   /\bnum\b/,
   /\bn[°o]\b/,
   /\bref\b/,
   /\bid\b/,
   /identifiant/,
+  /\bcode\b/,
+  /\bpostal\b/,
+  /\bmatricule\b/,
+  /\bsiret\b/,
+  /\bsiren\b/,
+  /\bean\b/,
+  /\bsku\b/,
+  /\btelephone\b/,
+  /\btel\b/,
+  /\bcompte\b/,
+
+  // Statistiques, moyennes, scores, notes, rangs
+  /\bmoyenne\b/,
+  /\baverage\b/,
+  /\bavg\b/,
+  /\bmediane\b/,
+  /\bmedian\b/,
+  /\bscore\b/,
+  /\bnote\b/,
+  /\bevaluation\b/,
+  /\brang\b/,
+  /\brank\b/,
+  /\bclassement\b/,
+  /\bposition\b/,
+  /\bcoefficient\b/,
+  /\bcoeff\b/,
+  /\bratio\b/,
+  /\bmultiplicateur\b/,
+  /\bpriorite\b/,
+  /\bpriority\b/,
+  /\bechelon\b/,
+  /\bniveau\b/,
+  /\blevel\b/,
+
+  // Amortissement / VNC / Annuité (grandeurs comptables non additives)
+  /\bvnc\b/,
+  /\bannuite\b/,
+  /valeur\s*nette\s*comptable/,
+  /valeur\s*residuelle/,
+
+  // Mesures non additives
+  /\bage\b/,
+  /(?:^|\s)duree(?!\s*(?:en\s*)?(?:heures?|hours?|min|h\b))/,
+  /(?:^|\s)duration(?!\s*(?:in\s*)?(?:hours?|min|h\b))/,
+  /temperature/,
+  /degre/,
+  /celsius/,
+  /fahrenheit/,
+  /poids\s*unitaire/,
 ];
 
 // Exclusions « souples » : un "total": "sum" explicite peut les rétablir.
 const EXCLUDED_HEADER_PATTERNS: RegExp[] = [
-  /moyenne/,
-  /average/,
-  /mediane/,
-  /median/,
   /indice/,
   /\bindex\b/,
 ];
@@ -50,15 +111,11 @@ const AGGREGATE_FORMULA_PATTERN =
   /(COUNTIFS?|NB\.SI(\.ENS)?|SUMIFS?|SOMME\.SI(\.ENS)?|MAXIFS?|MAX\.SI(\.ENS)?|MINIFS?|MIN\.SI(\.ENS)?|AVERAGEIFS?|MOYENNE\.SI(\.ENS)?|SUMPRODUCT|SOMMEPROD)/;
 
 const INCLUDED_HEADER_PATTERNS: RegExp[] = [
+  // Totaux et montants financiers
   /total/,
   /sous[- ]?total/,
   /montant/,
   /amount/,
-  /quantite/,
-  /quantity/,
-  /\bqty\b/,
-  /nombre/,
-  /count/,
   /budget/,
   /vente/,
   /sales/,
@@ -70,18 +127,96 @@ const INCLUDED_HEADER_PATTERNS: RegExp[] = [
   /bonus/,
   /stock/,
   /inventaire/,
+  /charge/,
+  /frais/,
+  /depense/,
+  /expense/,
+  /impot/,
+  /taxe/,
+  /\btva\b/,
+  /valeur/,
+  /\bval\b/,
+  /solde/,
+  /devis/,
+  /acompte/,
+  /avance/,
+  /reste(?:\s*a\s*payer)?/,
+  /net(?:\s*a\s*payer)?/,
+  /\bbrut\b/,
+  /\bmarge\b/,
+  /benefice/,
+  /gain/,
+  /perte/,
+  /profit/,
+  /\bloss\b/,
+  /resultat/,
+  /revenu/,
+  /revenue/,
+  /encaissement/,
+  /decaissement/,
+  /recette/,
+  /facturation/,
+  /facture/,
+  /cotisation/,
+  /versement/,
+  /paiement/,
+  /reglement/,
+  /echeance/,
+  /loyer/,
+  /honoraires/,
+  /prestation/,
+  /remuneration/,
+  /indemnite/,
+  /allocation/,
+  /aide/,
+  /subvention/,
+  /dotation/,
+  /provision/,
+  /\bdon\b/,
+  /dons\b/,
+  /tresorerie/,
+  /cash\s*flow/,
+  /credit/,
+  /debit/,
+  /capital/,
+  /principal/,
+  /interet/,
+  /epargne/,
+  /remboursement/,
+
+  // Quantités, volumes, mesures
+  /quantite/,
+  /quantity/,
+  /\bqty\b/,
+  /nombre/,
+  /\bnb\b/,
+  /count/,
+  /volume/,
+  /poids/,
+  /surface/,
+  /superficie/,
   /heures?/,
   /hours?/,
   /jours?/,
   /days?/,
   /\bkm\b/,
+  /kilometrage/,
+  /kilometres?/,
   /litres?/,
-  /charge/,
-  /frais/,
-  /depense/,
-  /impot/,
-  /taxe/,
-  /\btva\b/,
+  /unites?/,
+  /pieces?/,
+  /articles?/,
+  /colis/,
+  /palettes?/,
+  /effectif/,
+  /personnes?/,
+  /visiteurs?/,
+  /clients?/,
+  /dossiers?/,
+  /commandes?/,
+  /points?/,
+
+  // Périodes (tableaux croisés ou colonnes mensuelles)
   /janvier/,
   /fevrier/,
   /mars/,
@@ -149,6 +284,26 @@ function isCumulativeColumn(column: TableColumn): boolean {
   return /\$?[A-Z]{1,3}\$?\d+:[A-Z]{1,3}\{ROW\}/.test(formulaText(column));
 }
 
+// Détecte si un en-tête "Prix" ou "Tarif" ou "Coût" est en réalité un prix unitaire relatif,
+// car le tableau possède par ailleurs une colonne quantité et/ou une colonne montant total.
+function isRelativeUnitPrice(column: TableColumn, schema: TableSchema): boolean {
+  const header = normalizeHeader(column.header);
+  if (!/\b(prix|tarif|cout|cost|price)\b/.test(header)) return false;
+
+  // Si c'est explicitement un total ("prix total", "cout total"), ce n'est pas unitaire
+  if (/total|montant|sous[- ]?total/.test(header)) return false;
+
+  const otherColumns = schema.columns.filter((c) => c !== column);
+  const hasQuantity = otherColumns.some((c) =>
+    /\b(quantite|quantity|qty|nb|nombre|unites?|pieces?|volume)\b/.test(normalizeHeader(c.header))
+  );
+  const hasTotal = otherColumns.some((c) =>
+    /\b(total|montant|amount|sous[- ]?total|ca|chiffre\s*d.affaires|valeur)\b/.test(normalizeHeader(c.header))
+  );
+
+  return hasQuantity || hasTotal;
+}
+
 export function shouldSumColumn(column: TableColumn, schema: TableSchema): boolean {
   if (!isNumericType(column.type)) return false;
 
@@ -161,9 +316,12 @@ export function shouldSumColumn(column: TableColumn, schema: TableSchema): boole
   // Colonne calculée constante : même valeur sur chaque ligne → jamais sommée.
   if (isConstantCalculated(column)) return false;
 
-  // Année, date, n°/ID, prix unitaire, taux... : jamais additifs.
+  // Année, date, n°/ID, prix unitaire, taux, moyenne, score, code... : jamais additifs.
   const header = normalizeHeader(column.header);
   if (NEVER_SUM_HEADER_PATTERNS.some((pattern) => pattern.test(header))) return false;
+
+  // Prix unitaire relatif (ex: colonne "Prix" dans un tableau avec "Quantité" et "Total")
+  if (isRelativeUnitPrice(column, schema)) return false;
 
   // Agrégation ligne par ligne (critère variable via {row}) : on ne la somme
   // que si le modèle le demande, ou automatiquement dans un tableau croisé
@@ -179,6 +337,14 @@ export function shouldSumColumn(column: TableColumn, schema: TableSchema): boole
 
   if (EXCLUDED_HEADER_PATTERNS.some((pattern) => pattern.test(header))) return false;
   if (INCLUDED_HEADER_PATTERNS.some((pattern) => pattern.test(header))) return true;
+
+  // Une colonne de type devise (currency) est par nature un montant monétaire.
+  // Si elle n'a pas été exclue ci-dessus (pas un prix unitaire, pas une moyenne...), elle est sommable.
+  if (column.type === "currency") return true;
+
+  // Règle 5 : colonne calculée ligne par ligne, de type numérique (currency, integer, number).
+  // C'est le résultat calculé de chaque ligne (ex: Total HT, Marge, Écart, Bénéfice).
+  if (isCalculated(column) && isRowDependentFormula(column)) return true;
 
   // Tableau croisé (pivot) : les colonnes calculées de période sont sommables.
   if (schema.row_total_column && isCalculated(column)) return true;
@@ -200,6 +366,13 @@ const LABEL_RULES: TotalLabelsRule[] = [
   { pattern: /echeancier|amortissement|remboursement|schedule/, label: "CUMUL" },
   { pattern: /effectif|salaire|paie|salary|payroll/, label: "TOTAL EFFECTIFS" },
   { pattern: /depense|charge|frais|expense/, label: "TOTAL CHARGES" },
+  { pattern: /commission|prime|bonus/, label: "TOTAL COMMISSIONS" },
+  { pattern: /heure|temps|pointage|activite/, label: "TOTAL HEURES" },
+  { pattern: /projet|chantier|mission/, label: "TOTAL PROJET" },
+  { pattern: /client|compte|solde/, label: "TOTAL SOLDES" },
+  { pattern: /cotisation|contribution/, label: "TOTAL COTISATIONS" },
+  { pattern: /loyer|immobilier|bail/, label: "TOTAL LOYERS" },
+  { pattern: /don|subvention|aide/, label: "TOTAL DONS" },
 ];
 
 export function resolveTotalLabel(schema: TableSchema): string {
@@ -224,6 +397,20 @@ export interface ResolvedTotals {
   displayLast: boolean[];
 }
 
+// Tableaux où une ligne de totaux est par nature inappropriée (sauf si explicitement activée avec total_row: true).
+const NO_TOTAL_TABLE_PATTERNS = [
+  /amortissement|amortization|vnc\b/,
+  /bareme|grille\s*tarifaire|catalogue/,
+  /releve\s*de\s*notes?|bulletin\s*scolaire|notes?\s*des?\s*eleves/,
+  /classement|ranking|top\s*\d+|palmares/,
+  /planning|calendrier|agenda/,
+  /trombinoscope|annuaire|coordonnees/,
+];
+
+const COMMERCIAL_INVOICE_PATTERNS = [
+  /facture|commande|devis|achat|bon\s*de\s*commande|invoice|order|quote/,
+];
+
 export function resolveTotals(schema: TableSchema): ResolvedTotals {
   const summable = schema.columns.map((column) => shouldSumColumn(column, schema));
   const displayOnce = schema.columns.map(
@@ -236,16 +423,39 @@ export function resolveTotals(schema: TableSchema): ResolvedTotals {
     (column) => isNumericType(column.type) && isCumulativeColumn(column)
   );
   const hasSummableColumn = summable.some(Boolean);
+  const hasDisplayColumn = displayOnce.some(Boolean) || displayLast.some(Boolean);
+  const hasAnyTotalValue = hasSummableColumn || hasDisplayColumn;
   const sampleRows = schema.sample_rows ?? 3;
 
-  // La ligne de totaux est portée par les colonnes sommable : un total_row: false
-  // ne la supprime pas tant qu'une colonne de montant existe. Pour la désactiver,
-  // il faut mettre "total": "none" sur toutes les colonnes numériques.
+  const normalizedTitle = normalizeHeader(schema.title || "");
+  const isCommercialInvoice = COMMERCIAL_INVOICE_PATTERNS.some((p) => p.test(normalizedTitle));
+  const isNoTotalContext = NO_TOTAL_TABLE_PATTERNS.some((p) => p.test(normalizedTitle));
+
   let showTotalRow: boolean;
+
   if (schema.total_row === true) {
-    showTotalRow = hasSummableColumn;
+    // Explicitement demandé : afficher dès qu'au moins une valeur de total peut être affichée.
+    showTotalRow = hasAnyTotalValue;
+  } else if (schema.total_row === false) {
+    // Explicitement désactivé :
+    // Pour une commande / facture / devis commercial qui contient des montants sommables,
+    // le total général est essentiel (sécurité contre une omission accidentelle de l'IA).
+    // Pour TOUT autre tableau (classements, amortissements, barèmes, notes, annuaires...),
+    // la désactivation explicite est strictement respectée !
+    if (isCommercialInvoice && hasSummableColumn) {
+      showTotalRow = true;
+    } else {
+      showTotalRow = false;
+    }
   } else {
-    showTotalRow = hasSummableColumn && sampleRows >= 2;
+    // Mode "auto" (par défaut) :
+    // 1. Tableaux hors totaux par nature (amortissement, barème, classement, notes...) -> pas de totaux.
+    // 2. Tableaux standards -> afficher si colonnes sommables et au moins 2 lignes d'exemple.
+    if (isNoTotalContext) {
+      showTotalRow = false;
+    } else {
+      showTotalRow = hasSummableColumn && sampleRows >= 2;
+    }
   }
 
   return {

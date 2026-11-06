@@ -471,3 +471,26 @@ Vérifications manuelles :
   - Réparation automatique des formules de date qui référencent B : `B{row}` et `B2` sont réécrits vers la colonne de date réelle + `{row}` (ex. `C{row}`). Les références d'autres feuilles (`Ref!B10:B15`) sont protégées.
   - Le prompt interdit désormais explicitement de référencer B/A, même si l'utilisateur parle de « cellule B2 ».
 - **Tests :** 100 tests passants (dont `B2`/`B{row}` → `C{row}` et typage `Date`).
+
+---
+
+## 17. Correctif : précision et équilibre des totaux verticaux (totaux parasites vs totaux manquants)
+
+- **Symptômes signalés :** sur certains tableaux, une ligne de totaux apparaissait là où elle n'avait pas lieu d'être (ex: relevés de notes, classements, prix unitaires additionnés...), ou à l'inverse, des totaux manquaient sur des colonnes financières ou des tableaux métiers (ex: `Devis`, `Solde`, `Acompte`, `Marge`, `Écart`).
+- **Causes identifiées :**
+  1. `total_row: false` était ignoré pour tous les tableaux dès qu'une colonne numérique était présente, forçant une ligne de totaux même sur des classements, barèmes ou tableaux où l'utilisateur ou le modèle ne souhaitait pas de total.
+  2. Les prix unitaires abrégés (`PU`, `P.U.`, `Tarif`, `Prix` sans le mot « unitaire ») pouvaient être sommés par erreur si le modèle émettait `total: "sum"` ou s'ils n'étaient pas explicitement qualifiés d'« unitaire ».
+  3. Les grandeurs non additives (moyennes, scores, notes, classements, codes, matricules, ratios, VNC, annuités) n'étaient pas toutes protégées en exclusion dure.
+  4. Les termes financiers courants (`Solde`, `Devis`, `Acompte`, `Marge`, `Bénéfice`, `Net à payer`, `Loyer`, `Cotisation`, `Écart`) n'étaient pas dans `INCLUDED_HEADER_PATTERNS`, de sorte que les colonnes en mode `auto` restaient vides (`—`) et n'étaient pas sommées.
+  5. La règle 5 (somme automatique des colonnes calculées ligne par ligne de type devise/numérique) n'était pas active hors tableaux croisés.
+  6. `simpleTableBridge` forçait `total: "sum"` sur la colonne résultat même si celle-ci calculait une moyenne ou un score.
+- **Correctifs apportés (`totalPolicy.ts`, `simpleTableBridge.ts`, `route.ts`) :**
+  - **Respect de `total_row: false`** : respecté strictement sur tous les tableaux non commerciaux (classements, notes, barèmes, catalogues, amortissements). Seules les factures/commandes commerciales avec colonnes calculées de montants conservent leur total obligatoire en cas d'omission accidentelle du modèle.
+  - **Détection des tableaux hors-totaux en mode `auto`** : désactivation automatique de la ligne de totaux sur les relevés de notes, classements / Top N, catalogues de prix et barèmes.
+  - **Détection des prix unitaires relatifs** : si une colonne s'appelle `Prix` ou `Tarif` et que le tableau contient par ailleurs une colonne de quantité ou de total, `Prix` est identifié comme prix unitaire et n'est jamais sommé.
+  - **Exclusions dures renforcées** : moyennes, scores, notes, rangs, coefficients, codes, matricules, VNC, annuités, P.U., tarifs horaires/journaliers sont strictement exclus des sommes, même avec `total: "sum"`.
+  - **Inclusions financières complètes** : toutes les colonnes de type `currency` non exclues, ainsi que les termes (`Solde`, `Devis`, `Acompte`, `Marge`, `Bénéfice`, `Net à payer`, etc.) sont sommées par défaut.
+  - **Règle 5 activée** : toute colonne calculée dépendante de `{row}` numérique est sommée par défaut.
+  - **SimpleTableBridge assaini** : les résultats de type moyenne, prix unitaire, score ou pourcentage ne sont plus marqués en `total: "sum"`.
+  - **Prompt Gemini clarifié** : instructions claires sur quand mettre `total_row: true`, `total_row: false`, `total: "sum"`, `total: "none"`.
+- **Tests :** 107 tests passants (7 nouveaux tests ciblés couvrant les prix relatifs, dépenses directes, exclusions de notes/scores/moyennes, totaux de soldes/acomptes/devis/marge, colonnes calculées et respect de `total_row: false`).

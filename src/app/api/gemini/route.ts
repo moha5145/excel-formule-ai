@@ -431,37 +431,36 @@ en bas. C'est le cas de TOUTE liste de lignes répétées : facture, devis, comm
 stock, échéancier, trésorerie, effectifs, dépenses, suivi d'activité...
 
   RÈGLES DE DÉCISION (applique-les mécaniquement) :
-    - Tableau avec >= 2 lignes d'exemple ET au moins une colonne de montant (Total HT, Total TTC,
-      Montant, Budget, Salaire, Prime, Ventes, Stock, Quantité...) → "total_row": true OBLIGATOIRE.
-    - Tableau d'amortissement / VNC / intérêts où sommer n'a pas de sens métier → mets
-      "total": "none" sur les colonnes concernées.
-    - Pour désactiver complètement la ligne : "total": "none" sur TOUTES les colonnes numériques.
-      ("total_row": false ne suffit PAS si une colonne de montant reste sommable.)
-    - En cas de doute → "total_row": "auto" (le moteur décide), mais préfère true quand un total
-      de lignes a du sens pour l'utilisateur.
+    - Tableau avec montants de ligne répétés (facture, devis, commande, budget, ventes,
+      stock, dépenses, trésorerie, heures travaillées...) → "total_row": true.
+    - Tableau où une ligne de total n'a AUCUN SENS MÉTIER (classements/ranking, barèmes,
+      grilles tarifaires, relevés de notes/bulletins, trombinoscopes/annuaires, amortissement sans cumul)
+      → "total_row": false EXPLICITEMENT.
+    - En cas de doute → "total_row": "auto" (le moteur décide selon la nature des colonnes).
 
   Pour activer la ligne de totaux, AJOUTE AU SCHÉMA :
     - "total_row": true
     - "total_row_label": "..."  (libellé COURT et DYNAMIQUE, 2 mots max, adapté au tableau :
       "TOTAL" pour une commande/facture/devis, "TOTAL GÉNÉRAL" pour un budget,
       "CUMUL" pour un échéancier, "TOTAL VENTES", "TOTAL STOCK", "TOTAL EFFECTIFS",
-      "TOTAL CHARGES"... Ne mets PAS systématiquement "TOTAUX".)
+      "TOTAL CHARGES", "TOTAL SOLDES", "TOTAL HEURES"... Ne mets PAS systématiquement "TOTAUX".)
 
   Pour CHAQUE colonne numérique, précise si elle doit être additionnée :
-    - "total": "sum"  → colonnes de montants/quantités : Quantité, Total HT, Total TTC, Montant,
-      Budget, Salaire, Prime, Stock, Ventes, Heures, Jours...
+    - "total": "sum"  → colonnes additives : Quantité, Total HT, Total TTC, Montant, Solde,
+      Budget, Salaire, Prime, Stock, Ventes, Heures, Charges, Bénéfice, Écart...
     - "total": "once" → colonnes CALCULÉES CONSTANTES ou CUMULÉES :
       • agrégation sans {row} (NB.SI.ENS/COUNTIFS, SOMME.SI.ENS/SUMIFS, MAX.SI.ENS/MAXIFS…)
         → même valeur sur toutes les lignes, affichée UNE SEULE FOIS, jamais additionnée
         (ex. "Nb Factures (selon C5 & C6)", "Ventes cumulées (filtre)").
       • colonne de cumul / running total (en-tête "cumul", "progressif", ou plage $D$10:D{row})
         → le moteur affiche la DERNIÈRE valeur (le cumul final), jamais la somme des cumuls.
-    - "total": "none" → Prix Unitaire, Taux, Remise, Pourcentage, Moyenne, Année, Date,
-      Mois, Jour, Âge, Durée, N°, Réf, ID...
+    - "total": "none" → Prix Unitaire, Tarif, P.U., Taux, Remise, Pourcentage, Moyenne,
+      Score, Note, Rang, Année, Date, Mois, Jour, Âge, Durée, N°, Réf, Code, ID...
     - "total": "auto" → laisse le moteur décider (par défaut)
 
-  ⚠️ Un prix unitaire, un taux, une ANNÉE, une DATE, un mois, un jour, un âge, une durée,
-  un numéro/ID ne s'additionnent JAMAIS. Seuls les montants de ligne et les quantités se somment.
+  ⚠️ Un prix unitaire, un tarif, un taux, une MOYENNE, un score, une note, un rang, une ANNÉE,
+  une DATE, un mois, un jour, un âge, un code, un numéro/ID ne s'additionnent JAMAIS.
+  Seuls les montants de ligne et les grandeurs additives (quantités, heures) se somment.
   Extraire une année fiscale (ex. YEAR/MONTH) est une donnée de catégorie, pas un montant :
   mets "total": "none" et ne demande PAS de ligne de totaux s'il n'y a aucune colonne sommable.
 
@@ -562,13 +561,13 @@ stock, échéancier, trésorerie, effectifs, dépenses, suivi d'activité...
     - IMPORTANT : tu DOIS quand même fournir les formules des colonnes de données (Jan, Fev, Mar...).
       Seules les formules de TOTAUX sont automatiques.
 
-  QUAND NE PAS AJOUTER DE LIGNE DE TOTAUX :
-    - Tableau d'amortissement / VNC / mensualité où la somme des colonnes n'a pas de sens métier
-      → mets "total": "none" sur ces colonnes.
-    - Tableau sans aucune colonne de montant ou de quantité → aucune colonne "sum", donc pas de total.
-    - Une seule ligne d'exemple : pas de total automatique.
-    - Ne mets PAS "total_row": false pour éviter le total d'un montant : le moteur affichera
-      quand même les totaux des colonnes sommables. Utilise "total": "none" par colonne.`;
+  QUAND METTRE "total_row": false :
+    - Tableaux de classement / Top N / palmarès
+    - Relevés de notes scolaires / bulletins / évaluations
+    - Catalogues de prix / grilles tarifaires / barèmes
+    - Annuaires / trombinoscopes / listes de contacts
+    - Tableaux d'amortissement / VNC où la somme des lignes n'a pas de sens métier
+    - Plannings / agendas / calendriers`;
 
 
     // ─────────────────────────────────────────────────────────────────────────

@@ -57,7 +57,7 @@ export function convertSimpleTableToSchema(response: string, promptTitle?: strin
     let type: TableColumn["type"] = "number";
     const lower = header.toLowerCase();
     const isPercentageHeader = /taux|pourcentage|pourcent|\brate\b|ratio|coefficient/i.test(lower);
-    const hasStrongMonetaryHeader = /€|euro|prix|montant|total|salaire|prime|co[uû]t|charge|frais|valeur|budget|vente/i.test(lower);
+    const hasStrongMonetaryHeader = /€|euro|prix|montant|total|salaire|prime|co[uû]t|charge|frais|valeur|budget|vente|solde|devis|acompte|marge|benefice|revenu|recette|loyer|net|brut/i.test(lower);
     const hasTvaHeader = /\btva\b/i.test(lower);
     if (isPercentageHeader) type = "percentage";
     else if (hasStrongMonetaryHeader || (hasTvaHeader && !/%/.test(lower))) type = "currency";
@@ -67,14 +67,17 @@ export function convertSimpleTableToSchema(response: string, promptTitle?: strin
     else if (/quantité|nb|nombre|durée|années|mois|jours/i.test(lower)) type = "integer";
 
     if (isResult) {
+      const isNonSummableResult =
+        isPercentageHeader ||
+        /prix\s*unit|cout\s*unit|p\.?u\.?|moyenne|average|avg|score|note|rang|rank|indice|index/i.test(lower);
       return {
         header,
         type,
         formula: rowPlaceholderFormulaFr,
         formula_en: rowPlaceholderFormulaEn,
         description: "Résultat calculé",
-        // Une colonne de résultat numérique est un total de ligne naturel.
-        total: type === "currency" || type === "number" || type === "integer" ? "sum" : "none",
+        // Une colonne de résultat numérique est un total de ligne naturel sauf si c'est une moyenne, prix unitaire, score...
+        total: !isNonSummableResult && (type === "currency" || type === "number" || type === "integer") ? "sum" : "none",
       };
     }
 

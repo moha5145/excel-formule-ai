@@ -252,9 +252,142 @@ describe("totalPolicy", () => {
       expect(totals.summable).toEqual([false, true, true]);
       expect(totals.showTotalRow).toBe(true);
     });
+
+    it("détecte le prix unitaire relatif dans une facture (Prix sans qualificatif unitaire)", () => {
+      const schema: TableSchema = {
+        type: "complex_table",
+        title: "Facturation matériel",
+        parameters: [],
+        columns: [
+          { header: "Désignation", type: "text", formula: null, formula_en: null },
+          { header: "Quantité", type: "integer", formula: null, formula_en: null },
+          { header: "Prix", type: "currency", formula: null, formula_en: null },
+          { header: "Total HT", type: "currency", formula: "=D{row}*E{row}", formula_en: "=D{row}*E{row}" },
+        ],
+        data_start_row: 10,
+        sample_rows: 3,
+        total_row: true,
+      };
+      const totals = resolveTotals(schema);
+      expect(totals.summable).toEqual([false, true, false, true]);
+    });
+
+    it("somme le prix dans une liste de dépenses sans colonne de quantité ni de total", () => {
+      const schema: TableSchema = {
+        type: "complex_table",
+        title: "Notes de frais du mois",
+        parameters: [],
+        columns: [
+          { header: "Date", type: "date", formula: null, formula_en: null },
+          { header: "Catégorie", type: "text", formula: null, formula_en: null },
+          { header: "Prix", type: "currency", formula: null, formula_en: null },
+        ],
+        data_start_row: 10,
+        sample_rows: 3,
+        total_row: true,
+      };
+      const totals = resolveTotals(schema);
+      expect(totals.summable).toEqual([false, false, true]);
+    });
+
+    it("ne somme jamais les notes, scores, moyennes, classements ou codes", () => {
+      const schema: TableSchema = {
+        type: "complex_table",
+        title: "Évaluation des compétences",
+        parameters: [],
+        columns: [
+          { header: "Rang", type: "integer", formula: null, formula_en: null },
+          { header: "Code employé", type: "integer", formula: null, formula_en: null },
+          { header: "Note technique /20", type: "number", formula: null, formula_en: null },
+          { header: "Score global", type: "number", formula: null, formula_en: null },
+          { header: "Moyenne", type: "number", formula: "=MOYENNE(E{row}:F{row})", formula_en: "=AVERAGE(E{row}:F{row})" },
+        ],
+        data_start_row: 10,
+        sample_rows: 5,
+        total_row: true,
+      };
+      const totals = resolveTotals(schema);
+      expect(totals.summable).toEqual([false, false, false, false, false]);
+      expect(totals.showTotalRow).toBe(false);
+    });
+
+    it("somme les grandeurs financières usuelles (Solde, Devis, Acompte, Marge)", () => {
+      const schema: TableSchema = {
+        type: "complex_table",
+        title: "Suivi des chantiers en cours",
+        parameters: [],
+        columns: [
+          { header: "Client", type: "text", formula: null, formula_en: null },
+          { header: "Devis (€)", type: "currency", formula: null, formula_en: null },
+          { header: "Acompte versé", type: "currency", formula: null, formula_en: null },
+          { header: "Solde restant dû", type: "currency", formula: "=C{row}-D{row}", formula_en: "=C{row}-D{row}" },
+          { header: "Marge brute", type: "currency", formula: null, formula_en: null },
+        ],
+        data_start_row: 10,
+        sample_rows: 4,
+        total_row: "auto",
+      };
+      const totals = resolveTotals(schema);
+      expect(totals.summable).toEqual([false, true, true, true, true]);
+      expect(totals.showTotalRow).toBe(true);
+      expect(totals.label).toBe("TOTAL");
+    });
+
+    it("somme les colonnes calculées ligne par ligne (Règle 5)", () => {
+      const schema: TableSchema = {
+        type: "complex_table",
+        title: "Analyse des écarts de production",
+        parameters: [],
+        columns: [
+          { header: "Poste", type: "text", formula: null, formula_en: null },
+          { header: "Prévu (€)", type: "currency", formula: null, formula_en: null },
+          { header: "Réalisé (€)", type: "currency", formula: null, formula_en: null },
+          { header: "Écart de coût", type: "currency", formula: "=D{row}-C{row}", formula_en: "=D{row}-C{row}" },
+        ],
+        data_start_row: 10,
+        sample_rows: 3,
+        total_row: "auto",
+      };
+      const totals = resolveTotals(schema);
+      expect(totals.summable).toEqual([false, true, true, true]);
+      expect(totals.showTotalRow).toBe(true);
+    });
   });
 
   describe("resolveTotals", () => {
+    it("respecte total_row: false sur un tableau non commercial (relevé de notes ou classement)", () => {
+      const schema: TableSchema = {
+        type: "complex_table",
+        title: "Top 10 des commerciaux",
+        parameters: [],
+        columns: [
+          { header: "Commercial", type: "text", formula: null, formula_en: null },
+          { header: "Chiffre d'affaires", type: "currency", formula: null, formula_en: null },
+        ],
+        data_start_row: 10,
+        sample_rows: 10,
+        total_row: false,
+      };
+      const totals = resolveTotals(schema);
+      expect(totals.showTotalRow).toBe(false);
+    });
+
+    it("masque automatiquement la ligne de totaux sur un bulletin scolaire ou barème en mode auto", () => {
+      const schema: TableSchema = {
+        type: "complex_table",
+        title: "Relevé de notes trimestriel",
+        parameters: [],
+        columns: [
+          { header: "Élève", type: "text", formula: null, formula_en: null },
+          { header: "Total points", type: "number", formula: null, formula_en: null },
+        ],
+        data_start_row: 10,
+        sample_rows: 5,
+        total_row: "auto",
+      };
+      const totals = resolveTotals(schema);
+      expect(totals.showTotalRow).toBe(false);
+    });
     it("affiche la ligne de totaux pour une commande", () => {
       const totals = resolveTotals(makeInvoiceSchema());
       expect(totals.showTotalRow).toBe(true);
