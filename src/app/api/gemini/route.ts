@@ -650,6 +650,11 @@ Si l'utilisateur fournit des données de fichier importé (.xlsx, .xls, .csv) :
       Une agrégation constante (COUNTIFS/NB.SI.ENS, SUMIFS/SOMME.SI.ENS sans {row}) et toute
       colonne de cumul sont TOUJOURS "once" (jamais "sum").
       Le "total_row_label" doit être cohérent avec le tableau (pas "TOTAUX" partout).
+  📦 F. DÉSIGNATION OBLIGATOIRE DANS LES TABLEAUX COMMERCIAUX : Pour toute commande, facture,
+      devis, inventaire, stock ou dépense, tu DOIS TOUJOURS inclure en première colonne de données
+      le nom de l'article (ex: "Article", "Désignation", "Produit" ou "Description") de type "text"
+      (avec "formula": null), AVANT les colonnes de chiffres (Quantité, Prix Unitaire, Montants...).
+      Un tableau de facturation ou de commande sans colonne d'identification des articles est incomplet.
 
 STRUCTURE DE RÉPONSE (respecter cet ordre) :
 1. La formule dans un bloc de code markdown.

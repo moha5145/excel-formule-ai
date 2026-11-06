@@ -36,8 +36,8 @@ export const FORMULA_EXAMPLES: FormulaExample[] = [
 
   // 🧾 Ventes & Facturation
   {
-    label: "Tableau de commande avec Quantité, Prix HT, TVA 20% et Total TTC",
-    keywords: "commande",
+    label: "Facture client avec Article, Quantité, Prix unitaire HT, TVA 20% et Total TTC",
+    keywords: "facture",
     category: "🧾 Ventes & Facturation",
   },
   {
