@@ -4,6 +4,12 @@ import { type ExportFormat, postProcessFormula, convertToUsInvariant } from "./e
 import { isComplexResponse, extractTableSchema, validateSchema, SchemaValidationError } from "./excelExport/schemaParser";
 import { buildComplexWorkbook, type CustomExportData } from "./excelExport/complexExcelBuilder";
 import { convertSimpleTableToSchema } from "./excelExport/simpleTableBridge";
+import {
+  evaluateSpillFormula,
+  parseCellAddress,
+  indexToColLetter,
+  type CellValue,
+} from "./excelExport/spillEvaluator";
 export type { ExportFormat, CustomExportData };
 
 // Nettoie la syntaxe Markdown pour l'affichage brut en cellule Excel
@@ -823,20 +829,193 @@ export async function downloadFormulaAsExcel(
   return { warnings: [] };
 }
 
+function unescapeXml(value: string): string {
+  return value
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+}
+
+async function buildSheetFileMap(zip: JSZip): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  const wbFile = zip.file("xl/workbook.xml");
+  const relsFile = zip.file("xl/_rels/workbook.xml.rels");
+  if (!wbFile || !relsFile) return map;
+
+  const wbXml = await wbFile.async("string");
+  const relsXml = await relsFile.async("string");
+
+  const rels = new Map<string, string>();
+  for (const m of relsXml.matchAll(/<Relationship\b([^>]*)\/>/g)) {
+    const attrs = m[1];
+    const id = attrs.match(/\bId="([^"]+)"/)?.[1];
+    const target = attrs.match(/\bTarget="([^"]+)"/)?.[1];
+    if (id && target) rels.set(id, target);
+  }
+
+  for (const m of wbXml.matchAll(/<sheet\b([^>]*)\/>/g)) {
+    const attrs = m[1];
+    const name = attrs.match(/\bname="([^"]+)"/)?.[1];
+    const rid = attrs.match(/\br:id="([^"]+)"/)?.[1];
+    if (!name || !rid) continue;
+    const target = rels.get(rid);
+    if (!target) continue;
+    const normalized = target.replace(/^\/?xl\//, "").replace(/^\/+/, "");
+    map.set(`xl/${normalized}`, unescapeXml(name));
+  }
+
+  return map;
+}
+
 export async function patchWorkbookForceCalc(workbook: ExcelJS.Workbook): Promise<Blob> {
   const rawBuffer = await workbook.xlsx.writeBuffer();
   const zip = await JSZip.loadAsync(rawBuffer);
 
+  // Fonctions renvoyant un tableau dynamique (spill). Sans métadonnées
+  // dynamiques (cm="1" + metadata.xml), Excel applique l'intersection
+  // implicite et n'affiche que la 1ère valeur au lieu de déverser le tableau.
+  // LibreOffice exige en plus que ref couvre la plage exacte du spill.
+  const SPILL_FN_XML_REGEX =
+    /^\s*=?\s*(?:_xlfn\.(?:_xlws\.)?)?(?:FILTER|FILTRE|SORT|TRIER|SORTBY|TRIERPAR|UNIQUE|SEQUENCE|RANDARRAY|VSTACK|HSTACK|TAKE|DROP|CHOOSEROWS|CHOOSECOLS|EXPAND|TEXTSPLIT|TOCOL|TOROW|WRAPROWS|WRAPCOLS)\s*\(/i;
+
+  let hasDynamicArray = false;
+
+  const sheetFileMap = await buildSheetFileMap(zip);
+  const worksheetByName = new Map<string, ExcelJS.Worksheet>();
+  for (const ws of workbook.worksheets) {
+    worksheetByName.set(ws.name.toLowerCase(), ws);
+  }
+  const getWorksheet = (name: string): ExcelJS.Worksheet | undefined =>
+    worksheetByName.get(name.toLowerCase());
+  const hasSheet = (name: string): boolean => worksheetByName.has(name.toLowerCase());
+  const getCell = (sheetName: string, row: number, col: number): CellValue => {
+    const ws = getWorksheet(sheetName);
+    if (!ws) return null;
+    const value = ws.getCell(row, col).value as unknown;
+    if (value == null) return null;
+    if (value instanceof Date) return value.toISOString().slice(0, 10);
+    if (typeof value === "object") {
+      if ("result" in value) {
+        const result = (value as { result?: unknown }).result;
+        if (result == null) return null;
+        if (result instanceof Date) return result.toISOString().slice(0, 10);
+        return result as CellValue;
+      }
+      return null;
+    }
+    return value as CellValue;
+  };
+
   // 1. Patch feuilles : ca="1" sur chaque cellule à formule (recalcul à l'ouverture)
+  //    + marquage des formules dynamiques (cm="1" et <f t="array" ref="plage">).
   for (const filename of Object.keys(zip.files)) {
     if (filename.startsWith("xl/worksheets/sheet") && filename.endsWith(".xml")) {
       let xml = await zip.file(filename)!.async("string");
+      const sheetName = sheetFileMap.get(filename);
+
+      xml = xml.replace(
+        /<c\b([^>]*)>\s*<f\b([^>]*)>([\s\S]*?)<\/f>/g,
+        (match, cellAttrs: string, fAttrs: string, formula: string) => {
+          const refMatch = cellAttrs.match(/\br="([A-Z]+\d+)"/);
+          const isDynamic = SPILL_FN_XML_REGEX.test(formula);
+          let newCellAttrs = cellAttrs;
+          let newFAttrs = fAttrs;
+
+          if (!/\bca\s*=/.test(newFAttrs)) newFAttrs = ` ca="1"${newFAttrs}`;
+
+          if (isDynamic) {
+            hasDynamicArray = true;
+            if (!/\bcm\s*=/.test(newCellAttrs)) newCellAttrs += ' cm="1"';
+            if (!/\bt\s*=/.test(newFAttrs)) newFAttrs = ` t="array"${newFAttrs}`;
+            if (refMatch && !/\bref\s*=/.test(newFAttrs)) {
+              let refRange = refMatch[1];
+              if (sheetName) {
+                const spill = evaluateSpillFormula(
+                  unescapeXml(formula),
+                  sheetName,
+                  getCell,
+                  hasSheet
+                );
+                if (spill) {
+                  const start = parseCellAddress(refMatch[1]);
+                  const endCol = indexToColLetter(start.col + spill.cols - 1);
+                  const endRow = start.row + spill.rows - 1;
+                  if (spill.rows > 1 || spill.cols > 1) {
+                    refRange = `${refMatch[1]}:${endCol}${endRow}`;
+                  }
+                }
+              }
+              newFAttrs = ` ref="${refRange}"${newFAttrs}`;
+            }
+          }
+
+          return `<c${newCellAttrs}><f${newFAttrs}>${formula}</f>`;
+        }
+      );
+
+      // Cas des formules vides <f></f> non captées par le regex ci-dessus.
       xml = xml.replace(/<f>([^<]*)<\/f>/g, '<f ca="1">$1</f>');
       xml = xml.replace(/<f ([^>]*?)>/g, (match, attrs: string) => {
         if (/\bca\s*=/.test(attrs)) return match;
         return `<f ca="1" ${attrs}>`;
       });
+
       zip.file(filename, xml);
+    }
+  }
+
+  // 1bis. Métadonnées XLDAPR : indispensables pour que le spill soit reconnu.
+  if (hasDynamicArray) {
+    const metadataXml =
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+      '<metadata xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ' +
+      'xmlns:xda="http://schemas.microsoft.com/office/spreadsheetml/2017/dynamicarray">' +
+      '<metadataTypes count="1">' +
+      '<metadataType name="XLDAPR" minSupportedVersion="120000" copy="1" pasteAll="1" ' +
+      'pasteValues="1" merge="1" splitFirst="1" rowColShift="1" clearFormats="1" ' +
+      'clearComments="1" assign="1" coerce="1" cellMeta="1"/>' +
+      '</metadataTypes>' +
+      '<futureMetadata name="XLDAPR" count="1"><bk><extLst>' +
+      '<ext uri="{bdbb8cdc-fa1e-496e-a857-3c3f30c029c3}">' +
+      '<xda:dynamicArrayProperties fDynamic="1" fCollapsed="0"/>' +
+      '</ext></extLst></bk></futureMetadata>' +
+      '<cellMetadata count="1"><bk><rc t="1" v="0"/></bk></cellMetadata>' +
+      '</metadata>';
+    zip.file("xl/metadata.xml", metadataXml);
+
+    // Content-Type du nouveau composant.
+    const ctFile = zip.file("[Content_Types].xml");
+    if (ctFile) {
+      let ctXml = await ctFile.async("string");
+      if (!ctXml.includes("/xl/metadata.xml")) {
+        ctXml = ctXml.replace(
+          "</Types>",
+          '<Override PartName="/xl/metadata.xml" ' +
+            'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheetMetadata+xml"/>' +
+            "</Types>"
+        );
+      }
+      zip.file("[Content_Types].xml", ctXml);
+    }
+
+    // Relation workbook → metadata.
+    const relsFile = zip.file("xl/_rels/workbook.xml.rels");
+    if (relsFile) {
+      let relsXml = await relsFile.async("string");
+      if (!relsXml.includes("relationships/sheetMetadata")) {
+        const ids = [...relsXml.matchAll(/Id="rId(\d+)"/g)].map((m) => parseInt(m[1], 10));
+        const nextId = (ids.length > 0 ? Math.max(...ids) : 0) + 1;
+        relsXml = relsXml.replace(
+          "</Relationships>",
+          `<Relationship Id="rId${nextId}" ` +
+            'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sheetMetadata" ' +
+            'Target="metadata.xml"/>' +
+            "</Relationships>"
+        );
+      }
+      zip.file("xl/_rels/workbook.xml.rels", relsXml);
     }
   }
 

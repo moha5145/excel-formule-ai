@@ -46,7 +46,7 @@ const NEVER_SUM_HEADER_PATTERNS: RegExp[] = [
   // Identifiants, codes, références
   /numero/,
   /\bnum\b/,
-  /\bn[°o]\b/,
+  /\bn[°o](?=\s|$)/,
   /\bref\b/,
   /\bid\b/,
   /identifiant/,

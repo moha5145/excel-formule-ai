@@ -131,7 +131,7 @@ function inferColumnTypeFromHeader(header: string): ColumnType {
 
   // 1. Taux et pourcentages réels (AVANT la détection monétaire pour que
   //    "Taux TVA" soit percentage et non currency à cause du mot "tva")
-  if (/taux|pourcentage|percent|\brate\b|ratio|coefficient/.test(normalized)) {
+  if (/taux|pourcentage|percent|\brate\b|\bratio\b|coefficient/.test(normalized)) {
     return "percentage";
   }
 
@@ -184,7 +184,7 @@ export function normalizeColumnType(raw: unknown, header?: unknown): ColumnType 
   // erroné généré par le modèle à cause de la présence de "%" dans l'en-tête
   // (ex: "Heures sup (à 25%)" -> "number", "Montant TVA (20%)" -> "currency").
   // Ne PAS corriger si l'en-tête contient un mot de taux ("Taux TVA" reste percentage).
-  const isRateHeader = /taux|pourcentage|percent|\brate\b|ratio|coefficient/.test(normalized);
+  const isRateHeader = /taux|pourcentage|percent|\brate\b|\bratio\b|coefficient/.test(normalized);
   if (headerStr && raw === "percentage" && !isRateHeader) {
     if (/heure|duree|jour|minute|quantite|nombre|\bnb\b|\bqty\b|volume/.test(normalized)) {
       return "number";

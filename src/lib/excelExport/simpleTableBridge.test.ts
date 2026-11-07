@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
+import ExcelJS from "exceljs";
 import { convertSimpleTableToSchema } from "./simpleTableBridge";
+import { buildComplexWorkbook } from "./complexExcelBuilder";
 
 describe("simpleTableBridge", () => {
   it("devrait convertir un tableau Markdown simple et une formule en TableSchema complet", () => {
@@ -116,6 +118,77 @@ Calcul de la TVA :
     // "Montant TVA (20%) (€)" → currency malgré le "%" dans le libellé
     expect(schema?.columns[2].type).toBe("currency");
     expect(schema?.columns[2].total).toBe("sum");
+  });
+});
+
+describe("simpleTableBridge – colonnes de date", () => {
+  it("devrait typer 'Date de l'opération' en date (le mot 'opération' contient 'ratio')", () => {
+    const response = `
+Déterminer l'année fiscale d'une date :
+\`\`\`excel
+=ANNEE(C10)+SI(MOIS(C10)>$C$5;1;0)
+\`\`\`
+<!-- PARAM C5 = 6 -->
+
+| Ligne | Date de l'opération | Année fiscale |
+| :--- | :--- | :--- |
+| Ligne 1 | 15/03/2023 | 2023 |
+| Ligne 2 | 30/06/2023 | 2023 |
+| Ligne 3 | 01/07/2023 | 2024 |
+
+<!-- FORMULA_EN: =YEAR(C10)+IF(MONTH(C10)>$C$5,1,0) -->
+`;
+    const schema = convertSimpleTableToSchema(response, "Année fiscale");
+    expect(schema).not.toBeNull();
+
+    // "Date de l'opération" doit rester une date : le sous-mot "ratio" dans
+    // "opération" ne doit pas la faire passer en percentage.
+    expect(schema?.columns[0].type).toBe("date");
+    expect(schema?.columns[0].formula).toBeNull();
+
+    // Vérification de bout en bout : la cellule Excel doit contenir une vraie
+    // date (et non 0 avec un format pourcentage).
+    const wb = new ExcelJS.Workbook();
+    const { workbook } = buildComplexWorkbook(wb, schema!, response, "Année fiscale", "libreoffice-fr");
+    const sheet = workbook.getWorksheet("Tableau Interactif")!;
+    const dateCell = sheet.getCell("C10");
+    expect(dateCell.value).toBeInstanceOf(Date);
+    expect((dateCell.value as Date).toISOString().slice(0, 10)).toBe("2023-03-15");
+  });
+});
+
+describe("simpleTableBridge – fonctions dynamiques (spill)", () => {
+  it("devrait exporter FILTRE en _xlfn._xlws.FILTER une seule fois (pas de #NOM ? / #SPILL!)", () => {
+    const response = `
+Filtrer les factures impayées :
+\`\`\`excel
+=FILTRE(C10:C14;D10:D14="Impayée")
+\`\`\`
+
+| Ligne | N° Facture | Statut | Factures impayées |
+| :--- | :--- | :--- | :--- |
+| Ligne 1 | FAC-2024-01 | Impayée | FAC-2024-01 |
+| Ligne 2 | FAC-2024-02 | Payée | FAC-2024-03 |
+| Ligne 3 | FAC-2024-03 | Impayée | |
+| Ligne 4 | FAC-2024-04 | Payée | |
+| Ligne 5 | FAC-2024-05 | Impayée | |
+
+<!-- FORMULA_EN: =FILTER(C10:C14,D10:D14="Impayée") -->
+`;
+    const schema = convertSimpleTableToSchema(response, "Filtrer les factures impayées");
+    expect(schema).not.toBeNull();
+
+    const wb = new ExcelJS.Workbook();
+    const { workbook } = buildComplexWorkbook(wb, schema!, response, "Filtrer les factures impayées", "excel-fr");
+    const sheet = workbook.getWorksheet("Tableau Interactif")!;
+
+    // data_start_row = 4 (pas de paramètres) → 1ère ligne de données = 5
+    expect(sheet.getCell("E5").value).toEqual({
+      formula: '_xlfn._xlws.FILTER(C5:C14,D5:D14="Impayée")',
+    });
+    // Les lignes suivantes doivent rester vides pour laisser le spill opérer.
+    expect(sheet.getCell("E6").value).toBeNull();
+    expect(sheet.getCell("E7").value).toBeNull();
   });
 });
 

@@ -80,7 +80,8 @@ function resolveColumnFormula(
   col: TableColumn,
   row: number,
   format: ExportFormat,
-  warnings: string[]
+  warnings: string[],
+  lastDataRow?: number
 ): string {
   let template: string;
   let isAlreadyEnglish = false;
@@ -110,7 +111,43 @@ function resolveColumnFormula(
 
   // isAlreadyEnglish=true : resolveFormulaTemplate ne relance pas convertToUsInvariant
   // (déjà fait ci-dessus), mais exécute bien postProcessFormula (_xlfn, XLOOKUP→INDEX/MATCH).
-  return resolveFormulaTemplate(template, row, format, isAlreadyEnglish);
+  let resolved = resolveFormulaTemplate(template, row, format, isAlreadyEnglish);
+
+  // Les formules spill (FILTER/UNIQUE/SORT…) référencent souvent une plage
+  // plus large que les données (ex: C5:C14). On la borne à la dernière ligne
+  // de données pour ne pas aspirer la ligne TOTAL ou le texte d'aide.
+  if (lastDataRow !== undefined && isSpillFormula(col.formula_en || col.formula)) {
+    resolved = clampRangesToData(resolved, row, lastDataRow);
+  }
+
+  return resolved;
+}
+
+function clampRangesToData(formula: string, firstRow: number, lastDataRow: number): string {
+  return formula.replace(
+    /(\$?[A-Z]{1,3}\$?)(\d+):(\$?[A-Z]{1,3}\$?)(\d+)/g,
+    (match, c1: string, r1: string, c2: string, r2: string, offset: number) => {
+      // Ne pas toucher aux plages qualifiées par une feuille (Ref!A2:A10)
+      const prev = formula[offset - 1];
+      if (prev === "!" || /[A-Za-z0-9_]/.test(prev ?? "")) return match;
+      const start = parseInt(r1, 10);
+      const end = parseInt(r2, 10);
+      if (start >= firstRow && end > lastDataRow) {
+        return `${c1}${r1}:${c2}${lastDataRow}`;
+      }
+      return match;
+    }
+  );
+}
+
+// Fonctions à résultat "spill" (tableau dynamique) : la formule doit être
+// écrite UNE SEULE FOIS, dans la première ligne de données, et laisser les
+// cellules suivantes vides pour que la plage puisse se déverser.
+const SPILL_FORMULA_REGEX =
+  /^\s*=?\s*(?:_xlfn\.(?:_xlws\.)?)?(?:FILTER|FILTRE|SORT|TRIER|SORTBY|TRIERPAR|UNIQUE|SEQUENCE|RANDARRAY|VSTACK|HSTACK|TAKE|DROP|CHOOSEROWS|CHOOSECOLS|EXPAND|TEXTSPLIT|TOCOL|TOROW|WRAPROWS|WRAPCOLS)\s*\(/i;
+
+function isSpillFormula(formula: string | null | undefined): boolean {
+  return Boolean(formula && SPILL_FORMULA_REGEX.test(formula));
 }
 
 function setCellFormatByType(cell: ExcelJS.Cell, type: string): void {
@@ -132,6 +169,25 @@ function setCellFormatByType(cell: ExcelJS.Cell, type: string): void {
   }
 }
 
+function coerceNumeric(rawValue: string | number | Date | undefined): number | null {
+  if (rawValue === undefined || rawValue === null) return null;
+  if (typeof rawValue === "number") return Number.isFinite(rawValue) ? rawValue : null;
+  if (rawValue instanceof Date) return null;
+
+  let s = String(rawValue).trim();
+  if (s === "") return null;
+  // Ne jamais convertir une date ISO en nombre.
+  if (/^\d{4}[-/]\d{2}[-/]\d{2}/.test(s)) return null;
+
+  const isPercent = s.includes("%");
+  s = s.replace(/[€$£%\s\u00a0]/g, "").replace(/,/g, ".");
+  if (s === "" || s === "-" || s === "+" || s === ".") return null;
+
+  const n = Number(s);
+  if (!Number.isFinite(n)) return null;
+  return isPercent ? n / 100 : n;
+}
+
 function setCellValueByType(
   cell: ExcelJS.Cell,
   type: string,
@@ -143,16 +199,23 @@ function setCellValueByType(
     return;
   }
 
+  const numeric = coerceNumeric(rawValue);
+
   switch (type) {
     case "currency":
-      cell.value = typeof rawValue === "number" ? rawValue : Number(rawValue) || 0;
+      cell.value = numeric === null ? String(rawValue) : numeric;
       break;
     case "percentage":
-      cell.value = typeof rawValue === "number" ? rawValue :
-        Number(rawValue) > 1 ? Number(rawValue) / 100 : Number(rawValue) || 0;
+      if (numeric === null) {
+        cell.value = String(rawValue);
+      } else if (String(rawValue).includes("%")) {
+        cell.value = numeric;
+      } else {
+        cell.value = numeric > 1 ? numeric / 100 : numeric;
+      }
       break;
     case "integer":
-      cell.value = typeof rawValue === "number" ? rawValue : Number(rawValue) || 0;
+      cell.value = numeric === null ? String(rawValue) : numeric;
       break;
     case "date":
       if (rawValue instanceof Date) {
@@ -470,12 +533,27 @@ export function buildComplexWorkbook(
 
       if (col.formula || col.formula_en) {
         // Colonne calculée
-        try {
-          const resolved = resolveColumnFormula(col, currRowIndex, format, warnings);
-          cell.value = { formula: resolved.replace(/^=/, "") };
-        } catch (err: unknown) {
-          warnings.push(`Erreur formule col "${col.header}" ligne ${currRowIndex}: ${(err as Error).message}`);
-          cell.value = "";
+        // Les formules à résultat déversé (FILTER, SORT, UNIQUE…) ne doivent
+        // être saisies qu'une fois : les recopier sur chaque ligne provoque
+        // #SPILL!. On les écrit sur la 1ère ligne de données et on laisse les
+        // suivantes vides pour laisser la plage se déverser.
+        const spillColumn = isSpillFormula(col.formula_en || col.formula);
+        if (spillColumn && r > 0) {
+          cell.value = null;
+        } else {
+          try {
+            const resolved = resolveColumnFormula(
+              col,
+              currRowIndex,
+              format,
+              warnings,
+              dataStartRow + sampleRowsCount - 1
+            );
+            cell.value = { formula: resolved.replace(/^=/, "") };
+          } catch (err: unknown) {
+            warnings.push(`Erreur formule col "${col.header}" ligne ${currRowIndex}: ${(err as Error).message}`);
+            cell.value = "";
+          }
         }
         cell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: theme.calcTextColor } };
         cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: rowBg } };
@@ -628,7 +706,11 @@ export function buildComplexWorkbook(
     for (let c = 0; c < numCols; c++) {
       const col = schema.columns[c];
       const cell = tRow.getCell(3 + c);
-      if (totals.summable[c]) {
+      // Une colonne à résultat déversé n'est pas une colonne "par ligne" :
+      // pas de total (SUM d'une plage spill n'a pas de sens et peut la bloquer).
+      if (isSpillFormula(col.formula_en || col.formula)) {
+        cell.value = "";
+      } else if (totals.summable[c]) {
         const colLetter = String.fromCharCode(67 + c);
         const sumRange = `${colLetter}${firstDataExpRow}:${colLetter}${lastDataExpRow}`;
         cell.value = { formula: `SUM(${sumRange})` };

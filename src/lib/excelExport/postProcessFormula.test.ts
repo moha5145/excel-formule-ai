@@ -40,5 +40,27 @@ describe("postProcessFormula", () => {
         "=INDEX(C1:C10, MATCH(A10, B1:B10, 0))"
       );
     });
+
+    it("devrait traduire FILTRE/TRIER et appliquer le préfixe _xlfn._xlws (sinon #NOM ?)", () => {
+      const template = '=FILTRE(C10:C14;F10:F14="Impayée")';
+      expect(resolveFormulaTemplate(template, 10, "excel-fr", false)).toBe(
+        '=_xlfn._xlws.FILTER(C10:C14,F10:F14="Impayée")'
+      );
+      expect(resolveFormulaTemplate("=TRIER(C10:C14)", 10, "excel-fr", false)).toBe(
+        "=_xlfn._xlws.SORT(C10:C14)"
+      );
+    });
+
+    it("devrait préfixer _xlfn pour UNIQUE/SEQUENCE mais pas pour Google Sheets", () => {
+      expect(resolveFormulaTemplate("=UNIQUE(C10:C14)", 10, "excel-en", true)).toBe(
+        "=_xlfn.UNIQUE(C10:C14)"
+      );
+      expect(resolveFormulaTemplate("=SEQUENCE(10)", 10, "excel-en", true)).toBe(
+        "=_xlfn.SEQUENCE(10)"
+      );
+      expect(resolveFormulaTemplate("=FILTER(C10:C14,F10:F14=\"Impayée\")", 10, "sheets-en", true)).toBe(
+        '=FILTER(C10:C14,F10:F14="Impayée")'
+      );
+    });
   });
 });

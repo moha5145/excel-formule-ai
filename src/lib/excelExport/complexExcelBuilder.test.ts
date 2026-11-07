@@ -59,6 +59,43 @@ describe("complexExcelBuilder", () => {
     expect(sheet.getCell("D10").value).toEqual({ formula: "C10*$C$6/12" });
   });
 
+  it("préserve le texte quand une colonne d'entrée est mal typée en currency", () => {
+    const workbook = new ExcelJS.Workbook();
+    const schema: TableSchema = {
+      type: "complex_table",
+      title: "Liste",
+      parameters: [],
+      columns: [
+        { header: "Liste brute", type: "currency", formula: null, formula_en: null },
+        {
+          header: "Liste triée",
+          type: "text",
+          formula: "=TRIER(UNIQUE(C5:C9))",
+          formula_en: "=SORT(UNIQUE(C5:C9))",
+        },
+      ],
+      data_start_row: 5,
+      sample_rows: 5,
+    };
+
+    const response = `
+| Ligne | Liste brute | Liste triée |
+|---|---|---|
+| Ligne 1 | Pomme |  |
+| Ligne 2 | Banane |  |
+| Ligne 3 | Pomme |  |
+| Ligne 4 | Cerise |  |
+| Ligne 5 | Banane |  |
+`;
+
+    const { workbook: result } = buildComplexWorkbook(workbook, schema, response, "test", "excel-fr");
+    const sheet = result.getWorksheet("Tableau Interactif")!;
+
+    expect(sheet.getCell("C5").value).toBe("Pomme");
+    expect(sheet.getCell("C6").value).toBe("Banane");
+    expect(sheet.getCell("C8").value).toBe("Cerise");
+  });
+
   it("devrait écrire colonne Total ligne + ligne TOTAUX quand row_total_column + total_row sont définis", () => {
     const workbook = new ExcelJS.Workbook();
     const schema: TableSchema = {
@@ -753,5 +790,41 @@ describe("complexExcelBuilder", () => {
 
     // Données en lignes 10-14 : aucune ligne de totaux, l'instruction arrive en B15.
     expect(String(sheet.getCell("B15").value)).toContain("Conseil");
+  });
+
+  it("devrait écrire une formule FILTER une seule fois (spill) et laisser les lignes suivantes vides", () => {
+    const schema: TableSchema = {
+      type: "complex_table",
+      title: "Factures impayées",
+      parameters: [],
+      columns: [
+        { header: "N° Facture", type: "text", formula: null, formula_en: null },
+        { header: "Statut", type: "text", formula: null, formula_en: null },
+        {
+          header: "Factures impayées",
+          type: "text",
+          formula: '=FILTRE(C{row}:C14;F{row}:F14="Impayée")',
+          formula_en: '=FILTER(C{row}:C14,F{row}:F14="Impayée")',
+          total: "none",
+        },
+      ],
+      data_start_row: 5,
+      sample_rows: 3,
+      total_row: false,
+    };
+
+    const workbook = new ExcelJS.Workbook();
+    const { workbook: result } = buildComplexWorkbook(
+      workbook, schema, "", "Filtrer les factures impayées", "excel-fr"
+    );
+    const sheet = result.getWorksheet("Tableau Interactif")!;
+
+    // 1ère ligne de données (C=col N° Facture, E=col résultat)
+    expect(sheet.getCell("E5").value).toEqual({
+      formula: '_xlfn._xlws.FILTER(C5:C14,F5:F14="Impayée")',
+    });
+    // Les lignes suivantes restent vides pour permettre le spill.
+    expect(sheet.getCell("E6").value).toBeNull();
+    expect(sheet.getCell("E7").value).toBeNull();
   });
 });

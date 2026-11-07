@@ -42,6 +42,18 @@ describe("totalPolicy", () => {
       expect(shouldSumColumn(rate, schema)).toBe(false);
     });
 
+    it("ne somme pas un numéro de facture (N° Facture)", () => {
+      const schema = makeInvoiceSchema();
+      const column = {
+        header: "N° Facture",
+        type: "number" as const,
+        formula: null,
+        formula_en: null,
+        total: "sum" as const,
+      };
+      expect(shouldSumColumn(column, schema)).toBe(false);
+    });
+
     it("respecte total: none même si l'en-tête contient Total", () => {
       const schema = makeInvoiceSchema();
       const column = { header: "Total indicatif", type: "currency" as const, formula: "=1", formula_en: "=1", total: "none" as const };

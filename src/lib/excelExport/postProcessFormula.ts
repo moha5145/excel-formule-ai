@@ -23,6 +23,17 @@ const FRENCH_TO_ENGLISH: Record<string, string> = {
   AUJOURDHUI: "TODAY", MAINTENANT: "NOW", DATE: "DATE",
   ANNEE: "YEAR", MOIS: "MONTH", JOUR: "DAY",
   VAL: "VALUE",
+  // Fonctions dynamiques (Excel 365 / LibreOffice 24.8+)
+  FILTRE: "FILTER", TRIER: "SORT", TRIERPAR: "SORTBY",
+  UNIQUE: "UNIQUE", SEQUENCE: "SEQUENCE",
+  "ALEA.ENTRE.BORNES": "RANDARRAY",
+  "ASSEMB.V": "VSTACK", "ASSEMB.H": "HSTACK",
+  PRENDRE: "TAKE", EXCLURE: "DROP",
+  CHOISIRLIGNES: "CHOOSEROWS", CHOISIRCOLS: "CHOOSECOLS",
+  REDIMENSIONNER: "EXPAND",
+  "FRACTIONNER.TEXTE": "TEXTSPLIT",
+  "TEXTE.AVANT": "TEXTBEFORE", "TEXTE.APRES": "TEXTAFTER",
+  LET: "LET", LAMBDA: "LAMBDA",
 };
 
 export function postProcessFormula(formula: string, format: ExportFormat): string {
@@ -35,7 +46,20 @@ export function postProcessFormula(formula: string, format: ExportFormat): strin
   // Inject _xlfn. for modern Excel functions (LibreOffice & Excel via ExcelJS)
   // Google Sheets does NOT use _xlfn. prefix
   if (!format.startsWith("sheets")) {
-    const modernFns = ["MAXIFS", "MINIFS", "IFS", "IFNA", "CONCAT", "TEXTJOIN", "SWITCH", "XLOOKUP", "XMATCH"];
+    // FILTER et SORT sont des fonctions "worksheet" : dans le XML xlsx elles
+    // doivent porter le double préfixe _xlfn._xlws., sinon Excel affiche #NOM ?.
+    const xlwsFns = ["FILTER", "SORT"];
+    for (const fn of xlwsFns) {
+      const regex = new RegExp(`(?:_xlfn\\.(?:_xlws\\.)?)?(\\b${fn}\\b)(?=\\s*\\()`, "gi");
+      result = result.replace(regex, "_xlfn._xlws.$1");
+    }
+    const modernFns = [
+      "MAXIFS", "MINIFS", "IFS", "IFNA", "CONCAT", "TEXTJOIN", "SWITCH",
+      "XLOOKUP", "XMATCH", "UNIQUE", "SEQUENCE", "SORTBY", "RANDARRAY",
+      "VSTACK", "HSTACK", "TAKE", "DROP", "CHOOSEROWS", "CHOOSECOLS",
+      "EXPAND", "TEXTSPLIT", "TEXTBEFORE", "TEXTAFTER", "TOCOL", "TOROW",
+      "WRAPROWS", "WRAPCOLS", "LET", "LAMBDA",
+    ];
     for (const fn of modernFns) {
       const regex = new RegExp(`(?:_xlfn\\.)?(\\b${fn}\\b)(?=\\s*\\()`, "gi");
       result = result.replace(regex, "_xlfn.$1");
