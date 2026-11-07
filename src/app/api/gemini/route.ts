@@ -472,9 +472,10 @@ stock, échéancier, trésorerie, effectifs, dépenses, suivi d'activité...
     - Seule une colonne calculée LIGNE PAR LIGNE (formule contenant {row}) peut être "sum".
 
   ⚠️ TYPE D'UNE COLONNE : le "type" décrit la NATURE DE LA VALEUR, pas un taux cité dans l'en-tête.
-    - "Montant TVA (20%)" → "currency" : c'est un MONTANT, le (20%) n'est qu'un rappel du taux.
-    - "Taux TVA" ou "TVA (%)" → "percentage" : c'est un TAUX.
-    - Ne mets JAMAIS "percentage" sur une colonne de montant sous prétexte que son en-tête contient "%".
+    - "Montant TVA (20%)" → "currency" : c'est un MONTANT en euros, le (20%) n'est qu'un rappel du taux.
+    - "Heures sup (à 25%)" ou "Heures majorées (50%)" → "number" : c'est un NOMBRE D'HEURES (ex: 4 h), pas un pourcentage !
+    - "Taux TVA" ou "Taux de majoration (%)" → "percentage" : c'est un TAUX.
+    - Ne mets JAMAIS "percentage" sur une colonne de montant, d'heures ou de quantité sous prétexte que son en-tête contient "%".
 
   EXEMPLE — "Commande avec liste déroulante dynamique" (cas typique facture/commande) :
   <!-- TABLE_SCHEMA: {

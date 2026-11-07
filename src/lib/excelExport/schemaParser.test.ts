@@ -6,6 +6,7 @@ import {
   SchemaValidationError,
   extractFileModificationSchema,
   validateFileModificationSchema,
+  normalizeColumnType,
 } from "./schemaParser";
 import { resolveTotals } from "./totalPolicy";
 
@@ -394,5 +395,43 @@ describe("schemaParser", () => {
       expect(validated.new_columns).toHaveLength(1);
       expect(validated.new_columns[0].header).toBe("TVA 20%");
     });
+  });
+});
+
+describe("normalizeColumnType – heures / quantités avec % dans l'en-tête", () => {
+  it("devrait retourner 'number' pour 'Heures sup (à 25%)' même si le modèle dit 'percentage'", () => {
+    expect(normalizeColumnType("percentage", "Heures sup (à 25%)")).toBe("number");
+  });
+
+  it("devrait retourner 'number' pour 'Heures majorées (50%)'", () => {
+    expect(normalizeColumnType("percentage", "Heures majorées (50%)")).toBe("number");
+  });
+
+  it("devrait retourner 'number' pour 'Durée en heures (25%)'", () => {
+    expect(normalizeColumnType("percentage", "Durée en heures (25%)")).toBe("number");
+  });
+
+  it("devrait retourner 'number' pour 'Quantité rebut (5%)'", () => {
+    expect(normalizeColumnType("percentage", "Quantité rebut (5%)")).toBe("number");
+  });
+
+  it("devrait retourner 'currency' pour 'Montant TVA (20%)' même si le modèle dit 'percentage'", () => {
+    expect(normalizeColumnType("percentage", "Montant TVA (20%)")).toBe("currency");
+  });
+
+  it("devrait garder 'percentage' pour un vrai taux comme 'Taux TVA'", () => {
+    expect(normalizeColumnType("percentage", "Taux TVA")).toBe("percentage");
+  });
+
+  it("devrait garder 'percentage' pour 'Taux de majoration (%)'", () => {
+    expect(normalizeColumnType("percentage", "Taux de majoration (%)")).toBe("percentage");
+  });
+
+  it("devrait retourner 'number' quand le modèle donne 'number' pour 'Heures sup (à 25%)'", () => {
+    expect(normalizeColumnType("number", "Heures sup (à 25%)")).toBe("number");
+  });
+
+  it("devrait inférer 'number' pour 'Nombre de jours (5%)' sans type explicite", () => {
+    expect(normalizeColumnType(undefined, "Nombre de jours (5%)")).toBe("number");
   });
 });

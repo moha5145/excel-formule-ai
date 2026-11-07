@@ -58,17 +58,28 @@ export function convertSimpleTableToSchema(response: string, promptTitle?: strin
     const lower = header.toLowerCase();
     const isPercentageHeader = /taux|pourcentage|pourcent|\brate\b|ratio|coefficient/i.test(lower);
     const hasStrongMonetaryHeader = /€|euro|prix|montant|total|salaire|prime|co[uû]t|charge|frais|valeur|budget|vente|solde|devis|acompte|marge|benefice|revenu|recette|loyer|net|brut/i.test(lower);
+    const hasQuantityTimeHeader = /heure|minute|jour|dur[eé]e|quantit[eé]|nb|nombre|volume|pi[eè]ce/i.test(lower);
     const hasTvaHeader = /\btva\b/i.test(lower);
-    if (isPercentageHeader) type = "percentage";
-    else if (hasStrongMonetaryHeader || (hasTvaHeader && !/%/.test(lower))) type = "currency";
-    else if (/%/.test(lower)) type = "percentage";
-    else if (/date/i.test(lower)) type = "date";
-    else if (/nom|libellé|texte|produit|client|article/i.test(lower)) type = "text";
-    else if (/quantité|nb|nombre|durée|années|mois|jours/i.test(lower)) type = "integer";
+
+    if (isPercentageHeader) {
+      type = "percentage";
+    } else if (hasStrongMonetaryHeader || (hasTvaHeader && !/%/.test(lower))) {
+      type = "currency";
+    } else if (hasQuantityTimeHeader) {
+      type = "number";
+    } else if (/%/.test(lower)) {
+      type = "percentage";
+    } else if (/date/i.test(lower)) {
+      type = "date";
+    } else if (/nom|libellé|texte|produit|client|article/i.test(lower)) {
+      type = "text";
+    } else if (/années|mois/i.test(lower)) {
+      type = "integer";
+    }
 
     if (isResult) {
       const isNonSummableResult =
-        isPercentageHeader ||
+        (isPercentageHeader || (!hasQuantityTimeHeader && !hasStrongMonetaryHeader && !hasTvaHeader && /%/.test(lower))) ||
         /prix\s*unit|cout\s*unit|p\.?u\.?|moyenne|average|avg|score|note|rang|rank|indice|index/i.test(lower);
       return {
         header,

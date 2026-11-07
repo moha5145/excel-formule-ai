@@ -118,3 +118,59 @@ Calcul de la TVA :
     expect(schema?.columns[2].total).toBe("sum");
   });
 });
+
+describe("simpleTableBridge – heures / quantités avec % dans l'en-tête", () => {
+  it("devrait typer 'Heures sup (à 25%)' en number et non en percentage", () => {
+    const response = `
+Calcul des heures supplémentaires :
+\`\`\`excel
+=SI(C10>$C$5;C10-$C$5;0)
+\`\`\`
+<!-- PARAM C5 = 35 -->
+
+| Ligne | Heures travaillées | Heures normales | Heures sup (à 25%) |
+| :--- | :--- | :--- | :--- |
+| Ligne 1 | 39 | 35 | 4 |
+| Ligne 2 | 35 | 35 | 0 |
+| Ligne 3 | 42,5 | 35 | 7,5 |
+
+<!-- FORMULA_EN: =IF(C10>$C$5,C10-$C$5,0) -->
+`;
+    const schema = convertSimpleTableToSchema(response, "Heures supplémentaires majorées à 25%");
+    expect(schema).not.toBeNull();
+
+    // "Heures travaillées" → number (contient "heure")
+    expect(schema?.columns[0].type).toBe("number");
+
+    // "Heures normales" → number (contient "heure")
+    expect(schema?.columns[1].type).toBe("number");
+
+    // "Heures sup (à 25%)" → number malgré le "%" dans le libellé
+    expect(schema?.columns[2].type).toBe("number");
+
+    // Les heures sup sont sommables
+    expect(schema?.columns[2].total).toBe("sum");
+  });
+
+  it("devrait typer 'Quantité rebut (5%)' en number et non en percentage", () => {
+    const response = `
+Quantités rebut :
+\`\`\`excel
+=C10*0.05
+\`\`\`
+
+| Ligne | Quantité produite | Quantité rebut (5%) |
+| :--- | :--- | :--- |
+| Ligne 1 | 100 | 5 |
+| Ligne 2 | 200 | 10 |
+
+<!-- FORMULA_EN: =C10*0.05 -->
+`;
+    const schema = convertSimpleTableToSchema(response, "Calcul rebut");
+    expect(schema).not.toBeNull();
+
+    // "Quantité rebut (5%)" → number malgré le "%"
+    expect(schema?.columns[1].type).toBe("number");
+    expect(schema?.columns[1].total).toBe("sum");
+  });
+});

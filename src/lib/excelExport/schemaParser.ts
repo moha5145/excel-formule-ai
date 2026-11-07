@@ -128,36 +128,72 @@ const COLUMN_TYPE_ALIASES: Record<string, ColumnType> = {
 function inferColumnTypeFromHeader(header: string): ColumnType {
   const raw = header.toLowerCase();
   const normalized = normalizeHeader(header);
+
+  // 1. Taux et pourcentages réels (AVANT la détection monétaire pour que
+  //    "Taux TVA" soit percentage et non currency à cause du mot "tva")
   if (/taux|pourcentage|percent|\brate\b|ratio|coefficient/.test(normalized)) {
     return "percentage";
   }
-  if (
-    /%/.test(raw) &&
-    !/montant|total|prix|euro|cout|salaire|prime|budget|vente|valeur|frais|charge|tva/.test(normalized)
-  ) {
-    return "percentage";
-  }
-  if (/\bdate\b|datetime|echeance/.test(normalized)) return "date";
-  if (/montant|total|prix|euro|cout|salaire|prime|budget|vente|valeur|frais|charge|tva|devise|\bca\b/.test(normalized)) {
+
+  // 2. Détection monétaire (montants, totaux, prix...)
+  if (/montant|total|prix|euro|cout|salaire|prime|budget|vente|valeur|frais|charge|tva|solde|devis|acompte|marge|benefice|revenu|recette|loyer|net|brut|devise|\bca\b/.test(normalized)) {
     return "currency";
   }
-  if (/quantite|nombre|\bnb\b|annee|mois|jour|duree|age|\bcount\b|\bqty\b|heure/.test(normalized)) {
+
+  // 3. Détection temporelle / quantitative (heures, durées, quantités, jours, minutes)
+  // Même si l'en-tête mentionne un rappel de taux (ex: "Heures sup (à 25%)", "Quantité rebut (5%)"),
+  // la valeur est une quantité d'heures ou d'unités, JAMAIS un pourcentage !
+  if (/heure|duree|jour|minute|quantite|nombre|\bnb\b|\bqty\b|\bcount\b|volume|piece/.test(normalized)) {
+    return "number";
+  }
+
+  // 4. Le "%" résiduel (pas déjà capté par les mots-clés de taux ci-dessus)
+  if (/%/.test(raw)) {
+    return "percentage";
+  }
+
+  // 4. Dates
+  if (/\bdate\b|datetime|echeance/.test(normalized)) return "date";
+
+  // 5. Entiers calendaires ou compteurs
+  if (/annee|mois|age/.test(normalized)) {
     return "integer";
   }
+
+  // 6. Textes
   if (/statut|nom|libelle|produit|categorie|client|texte|description|service|region|pays|type|commentaire/.test(normalized)) {
     return "text";
   }
+
   return "number";
 }
 
 // Tolérant : le modèle produit parfois des types hors enum ("string", "count",
 // "monétaire", "bool"…). On normalise au lieu de rejeter tout le schéma.
 export function normalizeColumnType(raw: unknown, header?: unknown): ColumnType {
+  const headerStr = typeof header === "string" ? header : "";
+  const normalized = normalizeHeader(headerStr);
+
   // Un en-tête/nom "Date..." est TOUJOURS une date, même si le modèle a mis
   // "text"/"number" : sinon YEAR()/MONTH() renvoient #VALEUR! sur une chaîne.
-  if (typeof header === "string" && /\bdate\b/.test(normalizeHeader(header))) {
+  if (headerStr && /\bdate\b/.test(normalized)) {
     return "date";
   }
+
+  // Si l'en-tête indique clairement des heures ou des montants, corriger un type "percentage"
+  // erroné généré par le modèle à cause de la présence de "%" dans l'en-tête
+  // (ex: "Heures sup (à 25%)" -> "number", "Montant TVA (20%)" -> "currency").
+  // Ne PAS corriger si l'en-tête contient un mot de taux ("Taux TVA" reste percentage).
+  const isRateHeader = /taux|pourcentage|percent|\brate\b|ratio|coefficient/.test(normalized);
+  if (headerStr && raw === "percentage" && !isRateHeader) {
+    if (/heure|duree|jour|minute|quantite|nombre|\bnb\b|\bqty\b|volume/.test(normalized)) {
+      return "number";
+    }
+    if (/montant|total|prix|euro|cout|salaire|prime|budget|vente|valeur|frais|charge|tva|solde|devis|acompte|loyer/.test(normalized)) {
+      return "currency";
+    }
+  }
+
   if (typeof raw === "string") {
     const value = raw
       .trim()
@@ -170,7 +206,7 @@ export function normalizeColumnType(raw: unknown, header?: unknown): ColumnType 
     const alias = COLUMN_TYPE_ALIASES[value];
     if (alias) return alias;
   }
-  return inferColumnTypeFromHeader(typeof header === "string" ? header : "");
+  return inferColumnTypeFromHeader(headerStr);
 }
 
 const ColumnTypeSchema = z.preprocess(
