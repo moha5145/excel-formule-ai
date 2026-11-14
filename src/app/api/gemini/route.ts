@@ -788,13 +788,13 @@ ${modeInstruction}`;
     }));
 
     // Modèles ordonnés strictement selon la préférence utilisateur (série 3.x Flash uniquement) :
-    // 1. gemini-3.8-flash (timeout 7s pour fail-fast en cas de saturation 503)
-    // 2. gemini-3.7-flash (timeout 7s pour fail-fast)
+    // 1. gemini-3.8-flash (timeout 10s pour fail-fast en cas de saturation 503)
+    // 2. gemini-3.7-flash (timeout 10s pour fail-fast)
     // 3. gemini-3.6-flash (timeout 25s - dernier repli robuste)
     // Pas de version 2 (conformément aux consignes).
     const MODEL_CANDIDATES = [
-      { name: "gemini-3.8-flash", connectTimeoutMs: 7000 },
-      { name: "gemini-3.7-flash", connectTimeoutMs: 7000 },
+      { name: "gemini-3.8-flash", connectTimeoutMs: 10000 },
+      { name: "gemini-3.7-flash", connectTimeoutMs: 10000 },
       { name: "gemini-3.6-flash", connectTimeoutMs: 25000 },
     ];
 
