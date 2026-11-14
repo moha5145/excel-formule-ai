@@ -787,32 +787,49 @@ ${modeInstruction}`;
       parts: [{ text: msg.content }],
     }));
 
-    // Modèles ordonnés par préférence : gemini-3.8-flash → 3.6-flash → 3.1-flash → 2.5-flash.
-    // En cas de saturation (503), instabilité réseau (fetch failed) ou indisponibilité temporaire,
-    // le système bascule automatiquement sur le modèle suivant sans planter la requête de l'utilisateur.
+    // Modèles ordonnés strictement selon la préférence utilisateur (série 3.x Flash uniquement) :
+    // 1. gemini-3.8-flash (timeout 7s pour fail-fast en cas de saturation 503)
+    // 2. gemini-3.7-flash (timeout 7s pour fail-fast)
+    // 3. gemini-3.6-flash (timeout 25s - dernier repli robuste)
+    // Pas de version 2 (conformément aux consignes).
     const MODEL_CANDIDATES = [
-      "gemini-3.8-flash",
-      "gemini-3.6-flash",
-      "gemini-3.1-flash",
-      "gemini-2.5-flash",
+      { name: "gemini-3.8-flash", connectTimeoutMs: 7000 },
+      { name: "gemini-3.7-flash", connectTimeoutMs: 7000 },
+      { name: "gemini-3.6-flash", connectTimeoutMs: 25000 },
     ];
 
-    async function generateStream(modelName: string) {
-      const genAI = new GoogleGenerativeAI(apiKeyString);
-      const model = genAI.getGenerativeModel({
-        model: modelName,
-        systemInstruction: systemInstruction,
-      });
-      return model.generateContentStream({ contents });
+    async function generateStream(modelName: string, connectTimeoutMs: number) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => {
+        controller.abort(new Error(`Timeout de connexion (${connectTimeoutMs}ms) sur ${modelName}`));
+      }, connectTimeoutMs);
+
+      try {
+        const genAI = new GoogleGenerativeAI(apiKeyString);
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          systemInstruction: systemInstruction,
+        });
+        const streamResult = await model.generateContentStream(
+          { contents },
+          { signal: controller.signal }
+        );
+        // Dès que generateContentStream résout (en-têtes HTTP du flux reçus), annuler le timer de connexion
+        clearTimeout(timer);
+        return streamResult;
+      } catch (err) {
+        clearTimeout(timer);
+        throw err;
+      }
     }
 
     let result;
     let lastError: unknown;
 
-    for (const modelName of MODEL_CANDIDATES) {
+    for (const candidate of MODEL_CANDIDATES) {
       try {
-        result = await generateStream(modelName);
-        break; // Modèle opérationnel
+        result = await generateStream(candidate.name, candidate.connectTimeoutMs);
+        break; // Modèle opérationnel et connecté
       } catch (streamErr: unknown) {
         lastError = streamErr;
         const msg = streamErr instanceof Error ? streamErr.message : String(streamErr);
@@ -820,7 +837,7 @@ ${modeInstruction}`;
         if (/api[ _]?key/i.test(msg)) {
           throw streamErr;
         }
-        console.warn(`${modelName} unavailable (${msg}), falling back to next candidate...`);
+        console.warn(`${candidate.name} indisponible (${msg}), basculement immédiat vers le candidat suivant...`);
       }
     }
 

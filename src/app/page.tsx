@@ -72,6 +72,15 @@ function parseMessageContent(content: string) {
   };
 }
 
+function stripStreamingComments(content: string): string {
+  return content
+    // Supprime les commentaires HTML complets (schémas, params, flags...)
+    .replace(/<!--[\s\S]*?-->/g, "")
+    // Supprime un commentaire HTML non encore fermé en fin de flux streaming
+    .replace(/<!--[\s\S]*$/g, "")
+    .trim();
+}
+
 function JsonSchemaCollapsible({ jsonRaw }: { jsonRaw: string }) {
   const [isOpen, setIsOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -189,6 +198,7 @@ export default function Home() {
   // Lifted Assistant States
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
+  const [streamingText, setStreamingText] = useState("");
   const [enhancing, setEnhancing] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
@@ -550,12 +560,14 @@ export default function Home() {
 
       const decoder = new TextDecoder();
       let streamResponse = "";
+      setStreamingText("");
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         const chunk = decoder.decode(value, { stream: true });
         streamResponse += chunk;
+        setStreamingText(streamResponse);
       }
 
       const { content: cleanContent, effectiveMode } = applyModeOverride(streamResponse, generationMode);
@@ -597,6 +609,7 @@ export default function Home() {
       toast.error(err instanceof Error ? err.message : "Erreur lors de la génération.");
     } finally {
       setLoading(false);
+      setStreamingText("");
       setPreviewModalOpen(false);
     }
   }, [prompt, loading, apiKey, dailyFreeRemaining, fileContext, activeSheetName, excludedColumns, messages, modelChoice, exportFormat, generationMode, currentConversationId, setCurrentConversationId, setHistory, checkCoffeeToast]);
@@ -620,7 +633,7 @@ export default function Home() {
     if (loading && scrollAreaRef.current) {
       scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
     }
-  }, [loading]);
+  }, [loading, streamingText]);
 
   return (
     <div className="h-[100dvh] w-screen flex flex-row relative overflow-hidden bg-background">
@@ -854,9 +867,38 @@ export default function Home() {
                   );
                 })}
                 {loading && (
-                  <div className="flex justify-start">
-                    <div className="bg-loading-bg border border-loading-border text-loading-text text-sm prose max-w-none px-4 py-3 rounded-2xl animate-pulse">
-                      Rédaction de la formule...
+                  <div className="flex flex-col items-start w-full">
+                    <div className="w-full px-4 py-3 rounded-2xl bg-muted/80 border border-border/50 text-sm prose dark:prose-invert prose-p:text-foreground/80 prose-a:text-primary hover:prose-a:text-yellow-400 prose-strong:text-foreground prose-li:text-foreground/80 max-w-none">
+                      {streamingText ? (
+                        <>
+                          <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+                            pre({ children, className }: { children?: ReactNode; className?: string }) {
+                              return (
+                                <pre className={`relative p-3 my-2 overflow-x-auto bg-muted border border-border rounded-xl text-yellow-300 font-mono text-xs shadow-inner ${className || ""}`}>
+                                  {children}
+                                </pre>
+                              );
+                            },
+                            code({ inline, className, children }: { inline?: boolean; className?: string; children?: ReactNode }) {
+                              if (inline) {
+                                return <code className={`bg-muted text-yellow-200 px-1.5 py-0.5 rounded-md text-xs font-mono ${className || ""}`}>{children}</code>;
+                              }
+                              return <code className={className}>{children}</code>;
+                            },
+                          }}>
+                            {normalizeMarkdownBlocks(stripStreamingComments(streamingText))}
+                          </ReactMarkdown>
+                          <div className="inline-flex items-center gap-1.5 text-xs text-muted-foreground mt-2 animate-pulse not-prose">
+                            <span className="inline-block w-2 h-2 rounded-full bg-primary animate-ping" />
+                            <span>Génération en direct...</span>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex items-center gap-2 text-loading-text text-sm animate-pulse not-prose">
+                          <span className="inline-block w-2 h-2 rounded-full bg-primary animate-ping" />
+                          <span>Rédaction de la formule...</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

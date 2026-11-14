@@ -820,8 +820,9 @@ describe("complexExcelBuilder", () => {
     const sheet = result.getWorksheet("Tableau Interactif")!;
 
     // 1ère ligne de données (C=col N° Facture, E=col résultat)
+    // Le remapping de plage dynamique adapte C14 à la dernière ligne réelle (5 + 3 - 1 = 7)
     expect(sheet.getCell("E5").value).toEqual({
-      formula: '_xlfn._xlws.FILTER(C5:C14,F5:F14="Impayée")',
+      formula: '_xlfn._xlws.FILTER(C5:C7,F5:F7="Impayée")',
     });
     // Les lignes suivantes restent vides pour permettre le spill.
     expect(sheet.getCell("E6").value).toBeNull();

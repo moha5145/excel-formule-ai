@@ -69,24 +69,36 @@ Exemple de sortie : "Je souhaite obtenir une formule permettant de calculer la s
 
     const fullPrompt = `${systemInstruction}\n\nRequête brute: ${prompt}`;
 
-    async function generateContent(modelName: string) {
-      const genAI = new GoogleGenerativeAI(apiKeyString);
-      const model = genAI.getGenerativeModel({ model: modelName });
-      return model.generateContent(fullPrompt);
+    async function generateContent(modelName: string, timeoutMs: number) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => {
+        controller.abort(new Error(`Timeout (${timeoutMs}ms) sur ${modelName}`));
+      }, timeoutMs);
+
+      try {
+        const genAI = new GoogleGenerativeAI(apiKeyString);
+        const model = genAI.getGenerativeModel({ model: modelName });
+        const res = await model.generateContent(fullPrompt, { signal: controller.signal });
+        clearTimeout(timer);
+        return res;
+      } catch (err) {
+        clearTimeout(timer);
+        throw err;
+      }
     }
 
     const ENHANCE_CANDIDATES = [
-      "gemini-3.5-flash",
-      "gemini-2.5-flash",
-      "gemini-1.5-flash",
+      { name: "gemini-3.8-flash", timeoutMs: 5000 },
+      { name: "gemini-3.7-flash", timeoutMs: 5000 },
+      { name: "gemini-3.6-flash", timeoutMs: 15000 },
     ];
 
     let result;
     let lastError: unknown;
 
-    for (const modelName of ENHANCE_CANDIDATES) {
+    for (const candidate of ENHANCE_CANDIDATES) {
       try {
-        result = await generateContent(modelName);
+        result = await generateContent(candidate.name, candidate.timeoutMs);
         break;
       } catch (err: unknown) {
         lastError = err;
@@ -94,7 +106,7 @@ Exemple de sortie : "Je souhaite obtenir une formule permettant de calculer la s
         if (/api[ _]?key/i.test(msg)) {
           throw err;
         }
-        console.warn(`Enhance model ${modelName} unavailable (${msg}), falling back...`);
+        console.warn(`Enhance model ${candidate.name} unavailable (${msg}), falling back...`);
       }
     }
 

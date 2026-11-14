@@ -182,9 +182,10 @@ Filtrer les factures impayées :
     const { workbook } = buildComplexWorkbook(wb, schema!, response, "Filtrer les factures impayées", "excel-fr");
     const sheet = workbook.getWorksheet("Tableau Interactif")!;
 
-    // data_start_row = 4 (pas de paramètres) → 1ère ligne de données = 5
+    // data_start_row = 4 (pas de paramètres) → 1ère ligne de données = 5, 5 lignes d'exemple → 9
+    // Le remapping de plage dynamique adapte C14/D14 à la dernière ligne réelle (9)
     expect(sheet.getCell("E5").value).toEqual({
-      formula: '_xlfn._xlws.FILTER(C5:C14,D5:D14="Impayée")',
+      formula: '_xlfn._xlws.FILTER(C5:C9,D5:D9="Impayée")',
     });
     // Les lignes suivantes doivent rester vides pour laisser le spill opérer.
     expect(sheet.getCell("E6").value).toBeNull();
