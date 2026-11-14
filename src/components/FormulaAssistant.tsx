@@ -196,7 +196,6 @@ export function FormulaInputBar({
   const [fileLoading, setFileLoading] = useState(false);
   const [uploadMenuOpen, setUploadMenuOpen] = useState(false);
   const [fileAccept, setFileAccept] = useState(".xlsx,.xls,.csv");
-  const fileAcceptRef = useRef<string>(".xlsx,.xls,.csv");
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

@@ -11,7 +11,7 @@ import { Menu, Copy, FileSpreadsheet, ChevronDown, Code2, Check, Download } from
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import type { ExportFormat, CustomExportData } from "@/lib/excelExport";
-import { downloadFormulaAsExcel, normalizeTablesInResponse } from "@/lib/excelExport";
+import { normalizeTablesInResponse } from "@/lib/tableUtils";
 import { convertSimpleTableToSchema } from "@/lib/excelExport/simpleTableBridge";
 import { buildTextRepresentation } from "@/lib/fileParser";
 import ReactMarkdown from "react-markdown";
@@ -316,6 +316,7 @@ export default function Home() {
   const handleDownloadExcel = useCallback(async (content: string, promptForFile: string, mode?: GenerationMode, customData?: CustomExportData) => {
     if (!content) return;
     try {
+      const { downloadFormulaAsExcel } = await import("@/lib/excelExport");
       const { warnings } = await downloadFormulaAsExcel(content, promptForFile || "formule", exportFormat, mode, customData);
       if (warnings.length > 0) {
         toast.warning("Excel généré, mais avec des avertissements — si une colonne manque, Régénérez.", {

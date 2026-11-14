@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect, useCallback } from "react";
+import { useMemo, useState, useCallback } from "react";
 import {
   type TableSchema,
   validateSchema,
@@ -12,7 +12,7 @@ import { type FileContext } from "@/components/FormulaAssistant";
 import { FileSpreadsheet, Plus, Download, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { evaluateFormula } from "@/lib/formulaEvaluator";
-import { extractTables } from "@/lib/excelExport";
+import { extractTables } from "@/lib/tableUtils";
 
 export interface CustomExportData {
   paramValues?: Record<string, string | number>;
@@ -154,13 +154,11 @@ export function ComplexTablePreview({
     return inputs;
   }, [schema, markdownResponse]);
 
-  const [inputValues, setInputValues] = useState<Record<string, string>>({});
+  const [userInputs, setUserInputs] = useState<Record<string, string>>({});
 
-  useEffect(() => {
-    if (Object.keys(initialInputs).length > 0) {
-      setInputValues((prev) => ({ ...initialInputs, ...prev }));
-    }
-  }, [initialInputs]);
+  const inputValues = useMemo(() => {
+    return { ...initialInputs, ...userInputs };
+  }, [initialInputs, userInputs]);
 
   // Handler de téléchargement enrichi avec les valeurs du simulateur
   const handleDownload = useCallback(() => {
@@ -210,7 +208,7 @@ export function ComplexTablePreview({
       ? 5
       : Math.max(schema.data_start_row || 10, 5);
 
-    const cellsMap: Record<string, any> = {};
+    const cellsMap: Record<string, string | number | boolean | null | undefined> = {};
     schema.parameters.forEach((param, pIdx) => {
       const cleanRef = param.ref.replace(/\$/g, "").toUpperCase();
       const rawVal = paramValues[pIdx] ?? param.value;
@@ -223,7 +221,7 @@ export function ComplexTablePreview({
       cells: Array<{
         cIdx: number;
         isCalculated: boolean;
-        val: any;
+        val: unknown;
         isExcelOnly: boolean;
         isError: boolean;
         formula?: string | null;
@@ -253,7 +251,7 @@ export function ComplexTablePreview({
       const rowCells: Array<{
         cIdx: number;
         isCalculated: boolean;
-        val: any;
+        val: unknown;
         isExcelOnly: boolean;
         isError: boolean;
         formula?: string | null;
@@ -266,7 +264,7 @@ export function ComplexTablePreview({
         const col = schema.columns[cIdx];
         const isCalculated = Boolean(col.formula || col.formula_en);
         const colLetter = getColumnLetterFromIndex(cIdx);
-        let cellVal: any;
+        let cellVal: unknown;
 
         if (isCalculated) {
           const formulaToEval = col.formula_en || col.formula || "";
@@ -609,7 +607,7 @@ export function ComplexTablePreview({
                         type="text"
                         value={inputValues[key] ?? ""}
                         onChange={(e) =>
-                          setInputValues((prev) => ({ ...prev, [key]: e.target.value }))
+                          setUserInputs((prev) => ({ ...prev, [key]: e.target.value }))
                         }
                         placeholder="Saisir..."
                         className="w-full bg-transparent border-0 focus:ring-0 focus:outline-none p-0 text-foreground font-mono"

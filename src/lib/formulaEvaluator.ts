@@ -133,6 +133,8 @@ function indexToColLetter(idx: number): string {
   return letter || "A";
 }
 
+export type FormulaValue = number | string | boolean | null | undefined;
+
 class Parser {
   private tokens: Token[];
   private pos = 0;
@@ -151,17 +153,17 @@ class Parser {
     return this.tokens[this.pos++];
   }
 
-  public parse(): any {
+  public parse(): FormulaValue {
     if (this.tokens.length === 0) return 0;
     const res = this.parseExpression();
     return res;
   }
 
-  private parseExpression(): any {
+  private parseExpression(): FormulaValue {
     return this.parseComparison();
   }
 
-  private parseComparison(): any {
+  private parseComparison(): FormulaValue {
     let left = this.parseAdditive();
 
     while (this.peek() && ["<", ">", "<=", ">=", "==", "!=", "<>"].includes(this.peek()!.value)) {
@@ -182,7 +184,7 @@ class Parser {
     return left;
   }
 
-  private parseAdditive(): any {
+  private parseAdditive(): FormulaValue {
     let left = this.parseMultiplicative();
 
     while (this.peek() && (this.peek()!.value === "+" || this.peek()!.value === "-")) {
@@ -205,7 +207,7 @@ class Parser {
     return left;
   }
 
-  private parseMultiplicative(): any {
+  private parseMultiplicative(): FormulaValue {
     let left = this.parseUnary();
 
     while (this.peek() && (this.peek()!.value === "*" || this.peek()!.value === "/")) {
@@ -227,7 +229,7 @@ class Parser {
     return left;
   }
 
-  private parseUnary(): any {
+  private parseUnary(): FormulaValue {
     if (this.peek() && (this.peek()!.value === "+" || this.peek()!.value === "-")) {
       const op = this.consume().value;
       const val = this.parseUnary();
@@ -237,7 +239,7 @@ class Parser {
     return this.parsePrimary();
   }
 
-  private parsePrimary(): any {
+  private parsePrimary(): FormulaValue {
     const token = this.peek();
     if (!token) return 0;
 
@@ -267,7 +269,7 @@ class Parser {
       // Est-ce un appel de fonction ?
       if (this.peek() && this.peek()!.type === "LPAREN") {
         this.consume();
-        const args: any[] = [];
+        const args: FormulaValue[] = [];
         if (this.peek() && this.peek()!.type !== "RPAREN") {
           args.push(...this.parseArgument());
           while (this.peek() && this.peek()!.type === "COMMA") {
@@ -300,7 +302,7 @@ class Parser {
   }
 
   // Parse un argument pouvant être soit une expression soit une plage type C1:E1
-  private parseArgument(): any[] {
+  private parseArgument(): FormulaValue[] {
     const startToken = this.peek();
     if (startToken && startToken.type === "IDENT") {
       const nextToken = this.tokens[this.pos + 1];
@@ -317,7 +319,7 @@ class Parser {
     return [this.parseExpression()];
   }
 
-  private expandCellRange(startRef: string, endRef: string): any[] {
+  private expandCellRange(startRef: string, endRef: string): FormulaValue[] {
     const cleanStart = startRef.replace(/\{row\}/g, String(this.context.row || 1)).replace(/\$/g, "").toUpperCase();
     const cleanEnd = endRef.replace(/\{row\}/g, String(this.context.row || 1)).replace(/\$/g, "").toUpperCase();
 
@@ -338,7 +340,7 @@ class Parser {
     const minRow = Math.min(startRow, endRow);
     const maxRow = Math.max(startRow, endRow);
 
-    const values: any[] = [];
+    const values: FormulaValue[] = [];
     for (let c = minCol; c <= maxCol; c++) {
       const colLetter = indexToColLetter(c);
       for (let r = minRow; r <= maxRow; r++) {
@@ -348,7 +350,7 @@ class Parser {
     return values;
   }
 
-  private evaluateFunction(name: string, args: any[]): any {
+  private evaluateFunction(name: string, args: FormulaValue[]): FormulaValue {
     switch (name) {
       case "IF":
       case "SI": {
@@ -470,7 +472,7 @@ class Parser {
     }
   }
 
-  private resolveIdentifier(name: string): any {
+  private resolveIdentifier(name: string): FormulaValue {
     const row = this.context.row || 1;
     const resolvedRef = name.replace(/\{row\}/g, String(row)).replace(/\$/g, "").toUpperCase();
 

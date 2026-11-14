@@ -17,11 +17,6 @@ const YELLOW    = "FFEAB308";
 const WHITE     = "FFFFFFFF";
 const AMBER     = "FFCA8A04";
 const LIGHT_BG  = "FFF8FAFC";
-const LIGHT_YELLOW = "FFFEF3C7";
-const GOLD_BORDER = "FFD97706";
-const GREEN_TEXT = "FF166534";
-const GREEN_BG = "FFF0FDF4";
-const GREEN_BORDER = "FF16A34A";
 
 // Normalise un en-tête pour comparaison tolérante : minuscules, sans accents, sans espaces superflus,
 // sans suffixe entre parenthèses (ex: "Actif (C)" → "actif")
